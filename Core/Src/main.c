@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "winder.h"
 #include "lcd.h"
+#include "gitversion.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -216,9 +217,13 @@ int main(void)
 	lcd_set_cursor(7, 1);
 	lcd_write_string(__TIME__);
 
+	lcd_set_cursor(7, 2);
+	lcd_write_string(GIT_HASH);
 
-	lcd_set_cursor(0, 2);
-	lcd_write_string("Hello World :)");
+
+
+	lcd_set_cursor(0, 3);
+	lcd_write_string("Center to continue.");
 
 	HAL_TIM_Base_Start_IT(&htim3);
   /* USER CODE END 2 */
