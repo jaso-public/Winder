@@ -1,0 +1,9 @@
+Core/Inc/gitversion.h
+.cproject
+.mxproject
+.project
+.settings/
+Debug/
+STM32F303K8TX_FLASH.ld
+Winder Debug.launch
+
