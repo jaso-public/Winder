@@ -223,7 +223,7 @@ int main(void)
 
 
 	lcd_set_cursor(0, 3);
-	lcd_write_string("Center to continue.");
+	lcd_write_string("Center to continue. ");
 
 	HAL_TIM_Base_Start_IT(&htim3);
   /* USER CODE END 2 */
