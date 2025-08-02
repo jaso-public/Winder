@@ -42,6 +42,7 @@ typedef struct {
 	uint16_t dirPin;
 
 	double lastPulseTime;
+	double desired_speed;
 	double desired_velocity;
 	double current_velocity;
 	double acceleration;
@@ -53,6 +54,11 @@ typedef struct {
 } stepper_t;
 
 
+int isLeft();
+int isRight();
+int isTop();
+int isBottom();
+int isCenter();
 
 int main_menu();
 

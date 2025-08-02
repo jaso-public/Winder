@@ -61,10 +61,10 @@ void Error_Handler(void);
 #define RedLight_GPIO_Port GPIOF
 #define ButtonCenter_Pin GPIO_PIN_1
 #define ButtonCenter_GPIO_Port GPIOF
-#define EncoderClock_Pin GPIO_PIN_0
-#define EncoderClock_GPIO_Port GPIOA
-#define EncoderData_Pin GPIO_PIN_1
-#define EncoderData_GPIO_Port GPIOA
+#define GreenLight_Pin GPIO_PIN_1
+#define GreenLight_GPIO_Port GPIOA
+#define ButtonLeft_Pin GPIO_PIN_3
+#define ButtonLeft_GPIO_Port GPIOA
 #define CarriageDir_Pin GPIO_PIN_4
 #define CarriageDir_GPIO_Port GPIOA
 #define CarriagePulse_Pin GPIO_PIN_7
@@ -73,10 +73,6 @@ void Error_Handler(void);
 #define BarrelDir_GPIO_Port GPIOB
 #define BarrelPulse_Pin GPIO_PIN_1
 #define BarrelPulse_GPIO_Port GPIOB
-#define ButtonLeft_Pin GPIO_PIN_8
-#define ButtonLeft_GPIO_Port GPIOA
-#define GreenLight_Pin GPIO_PIN_9
-#define GreenLight_GPIO_Port GPIOA
 #define YellowLight_Pin GPIO_PIN_10
 #define YellowLight_GPIO_Port GPIOA
 #define ButtonBottom_Pin GPIO_PIN_11

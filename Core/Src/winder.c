@@ -11,12 +11,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <string.h>
 
 #include <stm32f303x8.h>
 #include <stm32f3xx_hal.h>
 #include <stm32f3xx_hal_gpio.h>
 #include <sys/_stdint.h>
+
 #include <winder.h>
+#include "gitversion.h"
 
 #define DEBOUNCE_DELAY 20
 
@@ -48,29 +52,47 @@ void setLight(int color) {
 }
 
 void testLights() {
-	printf("\r\n\n\nLeft:   Red\r\n");
-	printf("Top:    Yellow\r\n");
-	printf("Right:  Green\r\n");
-	printf("Center: Exit\r\n");
+
+	lcd_clear();
+	lcd_write_string("Light Test");
+	lcd_set_cursor(0, 1);
+	lcd_write_string("Left & Right to Exit");
+	lcd_set_cursor(0, 2);
+	lcd_write_string("T=red C=yellow B=green");
 
 	while(1) {
-		HAL_GPIO_WritePin(RedLight_GPIO_Port, RedLight_Pin, isLeft());
-		HAL_GPIO_WritePin(GreenLight_GPIO_Port, GreenLight_Pin, isRight());
-		HAL_GPIO_WritePin(YellowLight_GPIO_Port, YellowLight_Pin, isTop());
 
-		if(isCenter()) {
-			HAL_Delay(DEBOUNCE_DELAY);
-			while(isCenter()) HAL_Delay(DEBOUNCE_DELAY);
-			return;
+		if( isTop())    {
+	        HAL_GPIO_WritePin(RedLight_GPIO_Port, RedLight_Pin, GPIO_PIN_SET);
+		} else {
+	        HAL_GPIO_WritePin(RedLight_GPIO_Port, RedLight_Pin, GPIO_PIN_RESET);
 		}
+
+		if( isCenter())    {
+	        HAL_GPIO_WritePin(YellowLight_GPIO_Port, YellowLight_Pin, GPIO_PIN_SET);
+		} else {
+	        HAL_GPIO_WritePin(YellowLight_GPIO_Port, YellowLight_Pin, GPIO_PIN_RESET);
+		}
+
+		if( isBottom())    {
+	        HAL_GPIO_WritePin(GreenLight_GPIO_Port, GreenLight_Pin, GPIO_PIN_SET);
+		} else {
+	        HAL_GPIO_WritePin(GreenLight_GPIO_Port, GreenLight_Pin, GPIO_PIN_RESET);
+		}
+
+		if(isLeft() && isRight()) return;
 	}
 }
 
-void randomFlash() {
-    printf("\r\n\nCenter: Exit\r\n\n\n");
+void randomFlashing() {
 
     // Optional: seed the RNG once if needed
     srand(HAL_GetTick());  // Uses system uptime in ms
+
+	lcd_clear();
+	lcd_write_string("Random Lights");
+	lcd_set_cursor(0, 1);
+	lcd_write_string("Left & Right to Exit");
 
     while (1) {
         // Randomly set each light ON or OFF
@@ -79,14 +101,9 @@ void randomFlash() {
         HAL_GPIO_WritePin(YellowLight_GPIO_Port, YellowLight_Pin, rand() % 2);
 
         // Delay a little between flashes
-        HAL_Delay(200);  // adjust as desired
+        HAL_Delay(200);
 
-        // Exit if center button is pressed
-        if (isCenter()) {
-            HAL_Delay(DEBOUNCE_DELAY);
-            while (isCenter()) HAL_Delay(DEBOUNCE_DELAY);
-            return;
-        }
+		if(isLeft() && isRight()) return;
     }
 }
 
@@ -140,99 +157,6 @@ void randomFlash() {
 
 
 
-void display_menu(char* prompt, char** options, int count, int current, int start) {
-
-	setLight(YELLOW);
-
-	lcd_clear();
-	lcd_write_string(prompt);
-	int index = 1;
-
-	printf("\r\n\n%s\r\n", prompt);
-
-	int stop = start+3;
-	if(stop > count) stop = count;
-
-	for(int i=start ; i<stop ; i++) {
-		lcd_set_cursor(0,index++);
-		if(i == current) {
-			printf("** ");
-			lcd_write_string("** ");
-		} else {
-			printf("   ");
-			lcd_write_string("   ");
-
-		}
-
-		printf("%s\r\n", options[i]);
-		lcd_write_string(options[i]);
-	}
-}
-
-int main_menu() {
-
-	char* prompt = "Select:";
-	char* selections[] = {
-			"Move Steppers",
-			"Barrel Profile 1",
-			"Barrel Profile 2",
-			"Test Lights",
-			"Test Left Limit",
-			"Test Right Limit",
-			"Random Flashing"
-	};
-
-	int start = 0;
-	int current = 0;
-	int count = sizeof(selections) / sizeof(char*);
-	printf("count: %d\r\n", count);
-
-	display_menu(prompt, selections, count, current, start);
-
-	while(1) {
-
-		while(1) {
-			if(isTop()) {
-				current--;
-				if(current < 0) current = 0;
-				if(current < start) start--;
-				display_menu(prompt, selections, count, current, start);
-
-				HAL_Delay(DEBOUNCE_DELAY);
-				while(isTop()) HAL_Delay(DEBOUNCE_DELAY);
-				break;
-			}
-
-			if(isBottom()) {
-				current++;
-				if(current>=count) current = count-1;
-				if(current >= start+3) start++;
-				display_menu(prompt, selections, count, current, start);
-
-				HAL_Delay(DEBOUNCE_DELAY);
-				while(isBottom()) HAL_Delay(DEBOUNCE_DELAY);
-
-				break;
-			}
-
-			if(isCenter()) {
-				printf("\r\n\nselected: %d %s\r\n\n", current, selections[current]);
-				HAL_Delay(DEBOUNCE_DELAY);
-				while(isCenter()) HAL_Delay(DEBOUNCE_DELAY);
-
-				display_menu(prompt, selections, count, current, start);
-
-				if(current == 3) testLights();
-				if(current == 6) randomFlash();
-				display_menu(prompt, selections, count, current, start);
-				break;
-			}
-		}
-	}
-
-
-
-
 	void stepper_init(stepper_t* s,
 	                  GPIO_TypeDef* step_group, uint16_t step_pin,
 	                  GPIO_TypeDef* dir_group,  uint16_t dir_pin) {
@@ -241,7 +165,10 @@ int main_menu() {
 	    s->dirGroup    = dir_group;
 	    s->dirPin      = dir_pin;
 
-	    s->desired_velocity = 0.0;
+	    s->desired_speed = 5000.0;
+	    s->desired_velocity = 0;
+	    printf("set stepper desired to 5000\r\n");
+
 	    s->current_velocity = 0.0;
 	    s->acceleration     = ACCELERATION;  // constant, e.g. 300000.0
 
@@ -276,11 +203,16 @@ int main_menu() {
 			HAL_GPIO_WritePin(s->stepGroup, s->stepPin, GPIO_PIN_SET);
 			s->state = END_PULSE;
 			s->nextEvent = s->nextPulseEnd;
-		} else if(s->state == END_PULSE) {
+			return;
+		}
+
+		if(s->state == END_PULSE) {
 			HAL_GPIO_WritePin(s->stepGroup, s->stepPin, GPIO_PIN_RESET);
 			s->state = COMPUTE_NEXT;
-			s->nextEvent = UINT64_MAX;
+
 		}
+
+		s->nextEvent = UINT64_MAX;
 	}
 
 
@@ -301,7 +233,11 @@ int main_menu() {
 		    return;
 		}
 
-		if(s->state != COMPUTE_NEXT) return;
+		printf("in compute state:%d\r\n", s->state);
+
+		if(s->state != COMPUTE_NEXT) {
+			return;
+		}
 
 	    // Compute current speed
 	    double v = fabs(s->current_velocity);
@@ -329,7 +265,12 @@ int main_menu() {
 		    v1 = v0;
 		}
 
-		s->current_velocity = copysign(v1, s->desired_velocity);
+		// Now assign sign based on whether we're still moving in same direction
+		if (s->current_velocity != 0.0) {
+		    s->current_velocity = copysign(v1, s->current_velocity);
+		} else {
+		    s->current_velocity = copysign(v1, s->desired_velocity);
+		}
 
 	    // Re-enter idle if we're done
 	    if (s->desired_velocity == 0.0 && fabs(s->current_velocity) < 1.0) {
@@ -358,7 +299,7 @@ int main_menu() {
 		return 0;
 	}
 
-	void moveLoop(stepper_t* s) {
+	void moveLoop() {
 
 
 		uint8_t exitting = 0;
@@ -378,16 +319,28 @@ int main_menu() {
 		uint8_t  C_pressed = isCenter();
 		uint64_t C_time = getTicks();
 
+		stepper_t stepper;
+		stepper_t* s = &stepper;
+	    //stepper_init(s, BarrelPulse_GPIO_Port, BarrelPulse_Pin, BarrelDir_GPIO_Port, BarrelDir_Pin);
+
+	    stepper_init(s, CarriagePulse_GPIO_Port, CarriagePulse_Pin, CarriageDir_GPIO_Port, CarriageDir_Pin);
+
+	    printf("in the move loop  curr=%.2f  desired=%.2f\r\n", s->current_velocity, s->desired_velocity);
+
 		while(1) {
+			printf("looping curr=%.2f  desired=%.2f ", s->current_velocity, s->desired_velocity);
 
 			if(exitting && s->state == IDLE) return;
 
-			uint64_t now = getTick();
+			uint64_t now = getTicks();
 			uint64_t ticksToEvent = s->nextEvent - now;
+
+			double ticktoevent = ticksToEvent;
+			printf("last=%.2f  ticktoevent=%.2f\r\n", s->lastPulseTime, ticktoevent);
 
 
 			if(ticksToEvent < TOO_CLOSE_TO_EVENT) {
-				while(getTick() < s->nextEvent);
+				while(getTicks() < s->nextEvent);
 				fireEvent(s);
 				continue;
 			}
@@ -396,11 +349,11 @@ int main_menu() {
 			checkButton(&L_pressed, &L_time, isLeft(), now);
 			checkButton(&R_pressed, &R_time, isRight(), now);
 			if(checkButton(&T_pressed, &T_time, isTop(), now)) {
-				if(T_pressed) s->desired_velocity *= 1.1;
+				if(T_pressed) s->desired_speed *= 1.1;
 			}
 
 			if(checkButton(&B_pressed, &B_time, isBottom(), now)) {
-				if(B_pressed) s->desired_velocity /= 1.1;
+				if(B_pressed) s->desired_speed /= 1.1;
 			}
 
 			if(checkButton(&C_pressed, &C_time, isCenter(), now)) {
@@ -412,15 +365,227 @@ int main_menu() {
 
 			if( !exitting) {
 				if(L_pressed) {
-					s->desired_velocity = fabs(s->desired_velocity);
+					s->desired_velocity = fabs(s->desired_speed);
 				} else if(R_pressed) {
-					s->desired_velocity = -1.0 * fabs(s->desired_velocity);
+					s->desired_velocity = -1.0 * fabs(s->desired_speed);
 				} else {
 					s->desired_velocity = 0;
 				}
 			}
 
-			updateEvent(s);
+			computeNext(s);
 		}
 	}
+
+	void runStepper() {
+		printf("Entering runStepper\r\n");
+
+		uint8_t exitting = 0;
+
+		uint8_t  C_pressed = 1;
+		uint64_t C_time = getTicks();
+
+		HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
+		uint64_t nextEvent = getTicks() + 360;
+
+		while(1) {
+
+
+			while(getTicks() < nextEvent) ;
+			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_RESET);
+
+			nextEvent += (190*36);
+
+			if(checkButton(&C_pressed, &C_time, isCenter(), getTicks())) {
+				if(C_pressed) {
+					exitting = 1;
+				}
+			}
+
+			if(exitting && !C_pressed) {
+				printf("Leaving runStepper\r\n");
+				return;
+			}
+
+			while(getTicks() < nextEvent) ;
+			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
+			nextEvent += (10*36);
+		}
+
+	}
+
+	void buttonTest() {
+
+		uint8_t  L_pressed = 0;
+		uint8_t  R_pressed = 0;
+		uint8_t  T_pressed = 0;
+		uint8_t  B_pressed = 0;
+		uint8_t  C_pressed = 0;
+		uint8_t changed = 1;
+
+		lcd_clear();
+		lcd_write_string("Button Test");
+		lcd_set_cursor(0, 1);
+		lcd_write_string("Left & Right to Exit");
+		lcd_set_cursor(0, 2);
+		lcd_write_string("Pressed: ");
+
+		while(1) {
+			if( L_pressed != isLeft())   {changed = 1; L_pressed = isLeft(); }
+			if( R_pressed != isRight())  {changed = 1; R_pressed = isRight(); }
+			if( T_pressed != isTop())    {changed = 1; T_pressed = isTop(); }
+			if( B_pressed != isBottom()) {changed = 1; B_pressed = isBottom(); }
+			if( C_pressed != isCenter()) {changed = 1; C_pressed = isCenter(); }
+
+			if(changed) {
+				lcd_set_cursor(0, 2);
+				lcd_write_string("Pressed: ");
+				if(L_pressed) lcd_write_string("L");
+				if(R_pressed) lcd_write_string("R");
+				if(T_pressed) lcd_write_string("T");
+				if(B_pressed) lcd_write_string("B");
+				if(C_pressed) lcd_write_string("C");
+				lcd_write_string("     ");
+				changed = 0;
+			}
+
+			if(isLeft() && isRight()) return;
+		}
+	}
+
+
+	void display_menu(char* prompt, char** options, int count, int current, int start) {
+
+		setLight(YELLOW);
+
+		lcd_clear();
+		lcd_write_string(prompt);
+		int index = 1;
+
+		printf("\r\n\n%s\r\n", prompt);
+
+		int stop = start+3;
+		if(stop > count) stop = count;
+
+		for(int i=start ; i<stop ; i++) {
+			lcd_set_cursor(0,index++);
+			if(i == current) {
+				printf("** ");
+				lcd_write_string("** ");
+			} else {
+				printf("   ");
+				lcd_write_string("   ");
+
+			}
+
+			printf("%s\r\n", options[i]);
+			lcd_write_string(options[i]);
+		}
+	}
+
+	void displayInfo(char* date, char* time) {
+
+		lcd_clear();
+		lcd_set_cursor(0, 0);
+		lcd_write_string("Winder ");
+		lcd_write_string(date);
+
+		lcd_set_cursor(7, 1);
+		lcd_write_string(__TIME__);
+
+		lcd_set_cursor(7, 2);
+		lcd_write_string(GIT_HASH);
+
+		lcd_set_cursor(0, 3);
+		lcd_write_string("Center to continue. ");
+
+		uint8_t exitting = 0;
+		uint8_t  C_pressed = 1;
+		uint64_t C_time = getTicks();
+
+
+		while(1) {
+			if(checkButton(&C_pressed, &C_time, isCenter(), getTicks())) {
+				if(C_pressed) {
+					exitting = 1;
+				} else {
+					if(exitting) return;
+				}
+			}
+		}
+	}
+
+
+
+
+	int main_menu(char* date, char* time) {
+
+		char* prompt = "Select:";
+		char* selections[] = {
+				"Move Steppers",
+				"Run Stepper",
+				"Barrel Profile 1",
+				"Barrel Profile 2",
+				"Test Lights",
+				"Test Left Limit",
+				"Test Right Limit",
+				"Random Flashing",
+				"Button Test",
+				"Display Info"
+		};
+
+		int start = 0;
+		int current = 0;
+		int count = sizeof(selections) / sizeof(char*);
+		printf("count: %d\r\n", count);
+
+		display_menu(prompt, selections, count, current, start);
+
+		while(1) {
+
+			while(1) {
+				if(isTop()) {
+					current--;
+					if(current < 0) current = 0;
+					if(current < start) start--;
+					display_menu(prompt, selections, count, current, start);
+
+					HAL_Delay(DEBOUNCE_DELAY);
+					while(isTop()) HAL_Delay(DEBOUNCE_DELAY);
+					break;
+				}
+
+				if(isBottom()) {
+					current++;
+					if(current>=count) current = count-1;
+					if(current >= start+3) start++;
+					display_menu(prompt, selections, count, current, start);
+
+					HAL_Delay(DEBOUNCE_DELAY);
+					while(isBottom()) HAL_Delay(DEBOUNCE_DELAY);
+
+					break;
+				}
+
+				if(isCenter()) {
+					printf("\r\n\nselected: %d %s\r\n\n", current, selections[current]);
+
+					display_menu(prompt, selections, count, current, start);
+
+					//if(current == 0) moveLoop();
+					if(current == 1) runStepper();
+
+					if(strcmp(selections[current], "Test Lights") == 0) testLights();
+					if(strcmp(selections[current], "Random Flashing") == 0) randomFlashing();
+					if(strcmp(selections[current], "Button Test") == 0) buttonTest();
+					if(strcmp(selections[current], "Display Info") == 0) displayInfo(date, time);
+
+					display_menu(prompt, selections, count, current, start);
+					break;
+				}
+			}
+		}
+
+
+
 }
