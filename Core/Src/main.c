@@ -21,11 +21,16 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stepper.h"
+
 #include "winder.h"
 #include "lcd.h"
 #include "gitversion.h"
+
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <math.h>
 
 /* USER CODE END Includes */
@@ -50,6 +55,9 @@ I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim15;
 
 UART_HandleTypeDef huart2;
@@ -66,12 +74,18 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM15_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_TIM7_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+uint64_t twoRaised32 = 1ULL << 32;
+
 volatile uint64_t overflow_count = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -140,9 +154,10 @@ uint64_t getTicks(void) {
 	tim_cnt = __HAL_TIM_GET_COUNTER(&htim2);
 
 	// Check if overflow happened during this read
-	if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_UPDATE) && __HAL_TIM_GET_IT_SOURCE(&htim2, TIM_IT_UPDATE)) {
+	if (__HAL_TIM_GET_FLAG(&htim2,
+			TIM_FLAG_UPDATE) && __HAL_TIM_GET_IT_SOURCE(&htim2, TIM_IT_UPDATE)) {
 		// Timer overflowed but interrupt not yet handled
-		of += 65536;
+		of += twoRaised32;
 	}
 
 	__enable_irq();
@@ -151,18 +166,92 @@ uint64_t getTicks(void) {
 	return count;
 }
 
-void pulseAndWait(uint64_t pulseEnd) {
 
-	HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, 1);
+// configs (local to main)
+static StepperConfiguration barrelConfig = {
+	.stepperName            = "Barrel",
+    .timerHandle            = &htim2,
+    .compareRegister        = &TIM2->CCR1,
+    .compareFlag            = TIM_FLAG_CC1,
+    .compareInterruptSource = TIM_IT_CC1,
+    .pulsePort              = BarrelPulse_GPIO_Port,
+    .pulsePin               = BarrelPulse_Pin,
+    .directionPort          = BarrelDir_GPIO_Port,
+    .directionPin           = BarrelDir_Pin,
+    .computeIrqNumber       = TIM6_DAC1_IRQn,
+    .pulseWidthTicks        = 360u
+};
 
-	uint64_t endUp = getTicks() + 360; // 10 microseconds
-	while (getTicks() < endUp)
-		;
+static StepperConfiguration carriageConfig = {
+	.stepperName            = "Carriage",
+    .timerHandle            = &htim2,
+    .compareRegister        = &TIM2->CCR3,
+    .compareFlag            = TIM_FLAG_CC3,
+    .compareInterruptSource = TIM_IT_CC3,
+    .pulsePort              = CarriagePulse_GPIO_Port,
+    .pulsePin               = CarriagePulse_Pin,
+    .directionPort          = CarriageDir_GPIO_Port,
+    .directionPin           = CarriageDir_Pin,
+    .computeIrqNumber       = TIM7_DAC2_IRQn,
+    .pulseWidthTicks        = 360u
+};
 
-	HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, 0);
+Stepper barrelStepper, carriageStepper;
 
-	while (getTicks() < pulseEnd)
-		;
+void steppersInitAll(void)
+{
+    stepperInit(&barrelStepper,  &barrelConfig,  300000.0f );
+    stepperInit(&carriageStepper,&carriageConfig,300000.0f );
+
+    // Start timers + NVIC (do once)
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_TIM6_CLK_ENABLE();
+    __HAL_RCC_TIM7_CLK_ENABLE();
+
+    HAL_TIM_Base_Start_IT(&htim2);
+    HAL_TIM_Base_Start_IT(&htim3);
+
+    __HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
+    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+
+    // Initialize the timer to zero.
+    __HAL_TIM_SET_COUNTER(&htim2, 0);
+
+    HAL_NVIC_SetPriority(TIM2_IRQn,       0, 0);
+    HAL_NVIC_EnableIRQ(TIM2_IRQn);
+
+    HAL_NVIC_SetPriority(TIM6_DAC1_IRQn,  1, 0);
+    HAL_NVIC_EnableIRQ(TIM6_DAC1_IRQn);
+
+    HAL_NVIC_SetPriority(TIM7_DAC2_IRQn,  1, 0);
+    HAL_NVIC_EnableIRQ(TIM7_DAC2_IRQn);
+}
+
+
+void Timer2_IRQHandler(void) {
+	stepperHandleIrq(&barrelStepper);
+	stepperHandleIrq(&carriageStepper);
+
+	// increment the overflow count
+	if (TIM2->SR & TIM_SR_UIF) {
+		TIM2->SR &= ~TIM_SR_UIF;
+		overflow_count += twoRaised32;
+	}
+}
+
+void Barrel_IRQHandler(void) {
+	computeNextStepperEvent(&barrelStepper);
+}
+
+void Carriage_IRQHandler(void) {
+	computeNextStepperEvent(&carriageStepper);
+}
+
+// Called by HAL once EXTI3 interrupt is handled
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if (GPIO_Pin == LimitSwitch_Pin) {
+	}
 }
 
 /* USER CODE END 0 */
@@ -201,46 +290,58 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM1_Init();
   MX_TIM15_Init();
+  MX_TIM6_Init();
+  MX_TIM7_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
 
 	// get the date as mm/dd/yy
 	char date[9];
 	getShortCompileDate(date);
 	printf("Hello from the Winder -- Build: %s %s\r\n", date, __TIME__);
 
-	HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
-	__HAL_TIM_SET_COUNTER(&htim2, 0);  // Optional: reset to 0
-
 	lcd_init(&hi2c1);
+	lcd_clear();
+//
+//	lcd_write_string("Winder -- ");
+//	lcd_write_string(__TIME__);
+
+	steppersInitAll();
+
+
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-
+//	while(1) {
+//		HAL_GPIO_WritePin( Led_GPIO_Port, Led_Pin, GPIO_PIN_RESET);
+//		HAL_Delay(100);
+//		HAL_GPIO_WritePin( Led_GPIO_Port, Led_Pin, GPIO_PIN_SET);
+//		HAL_Delay(100);
+//	}
+//
+//
+//	while(1) {
+//
+//
+//		for(int i=0 ; i<5000 ; i++) {
+//			HAL_GPIO_WritePin( CarriagePulse_GPIO_Port, CarriagePulse_Pin, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_RESET);
+//			HAL_Delay(1);
+//			HAL_GPIO_WritePin( CarriagePulse_GPIO_Port, CarriagePulse_Pin, GPIO_PIN_SET);
+//			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
+//			HAL_Delay(1);
+//		}
+//
+//		HAL_GPIO_TogglePin( CarriageDir_GPIO_Port, CarriageDir_Pin);
+//		HAL_GPIO_TogglePin( BarrelDir_GPIO_Port, BarrelDir_Pin);
+//	}
+//
+//
 
 	main_menu(date, __TIME__);
-//	  if(HAL_GPIO_ReadPin(ButtonLeft_GPIO_Port, ButtonLeft_Pin) == 0) {
-//		  printf("ButtonLeft\r\n");
-//	  }
-//
-//	  if(HAL_GPIO_ReadPin(ButtonRight_GPIO_Port, ButtonRight_Pin) == 0) {
-//		  printf("ButtonRight\r\n");
-//	  }
-//
-//	  if(HAL_GPIO_ReadPin(ButtonTop_GPIO_Port, ButtonTop_Pin) == 0) {
-//		  printf("ButtonTop\r\n");
-//	  }
-//
-//	  if(HAL_GPIO_ReadPin(ButtonBottom_GPIO_Port, ButtonBottom_Pin) == 0) {
-//		  printf("ButtonBottom\r\n");
-//	  }
-//
-//	  if(HAL_GPIO_ReadPin(ButtonCenter_GPIO_Port, ButtonCenter_Pin) == 0) {
-//		  printf("ButtonCenter\r\n");
-//	  }
 
     /* USER CODE END WHILE */
 
@@ -408,6 +509,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -427,16 +529,163 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
-
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_OC_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 0;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 65535;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 0;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 65535;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
 
 }
 
@@ -575,7 +824,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GreenLight_Pin|CarriageDir_Pin|CarriagePulse_Pin|YellowLight_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, BarrelDir_Pin|BarrelPulse_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, BarrelDir_Pin|BarrelPulse_Pin|Led_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : RedLight_Pin */
   GPIO_InitStruct.Pin = RedLight_Pin;
@@ -590,6 +839,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(ButtonCenter_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : OpticalSensor_Pin ButtonBottom_Pin ButtonLeft_Pin */
+  GPIO_InitStruct.Pin = OpticalSensor_Pin|ButtonBottom_Pin|ButtonLeft_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pins : GreenLight_Pin CarriageDir_Pin CarriagePulse_Pin YellowLight_Pin */
   GPIO_InitStruct.Pin = GreenLight_Pin|CarriageDir_Pin|CarriagePulse_Pin|YellowLight_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -597,36 +852,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ButtonLeft_Pin */
-  GPIO_InitStruct.Pin = ButtonLeft_Pin;
+  /*Configure GPIO pin : LimitSwitch_Pin */
+  GPIO_InitStruct.Pin = LimitSwitch_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ButtonLeft_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(LimitSwitch_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BarrelDir_Pin BarrelPulse_Pin */
-  GPIO_InitStruct.Pin = BarrelDir_Pin|BarrelPulse_Pin;
+  /*Configure GPIO pins : BarrelDir_Pin BarrelPulse_Pin Led_Pin */
+  GPIO_InitStruct.Pin = BarrelDir_Pin|BarrelPulse_Pin|Led_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : ButtonBottom_Pin */
-  GPIO_InitStruct.Pin = ButtonBottom_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(ButtonBottom_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LimitAlarm_Pin */
-  GPIO_InitStruct.Pin = LimitAlarm_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(LimitAlarm_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ButtonRight_Pin ButtonTop_Pin */
   GPIO_InitStruct.Pin = ButtonRight_Pin|ButtonTop_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

@@ -61,10 +61,13 @@ void Error_Handler(void);
 #define RedLight_GPIO_Port GPIOF
 #define ButtonCenter_Pin GPIO_PIN_1
 #define ButtonCenter_GPIO_Port GPIOF
+#define OpticalSensor_Pin GPIO_PIN_0
+#define OpticalSensor_GPIO_Port GPIOA
 #define GreenLight_Pin GPIO_PIN_1
 #define GreenLight_GPIO_Port GPIOA
-#define ButtonLeft_Pin GPIO_PIN_3
-#define ButtonLeft_GPIO_Port GPIOA
+#define LimitSwitch_Pin GPIO_PIN_3
+#define LimitSwitch_GPIO_Port GPIOA
+#define LimitSwitch_EXTI_IRQn EXTI3_IRQn
 #define CarriageDir_Pin GPIO_PIN_4
 #define CarriageDir_GPIO_Port GPIOA
 #define CarriagePulse_Pin GPIO_PIN_7
@@ -77,15 +80,23 @@ void Error_Handler(void);
 #define YellowLight_GPIO_Port GPIOA
 #define ButtonBottom_Pin GPIO_PIN_11
 #define ButtonBottom_GPIO_Port GPIOA
-#define LimitAlarm_Pin GPIO_PIN_3
-#define LimitAlarm_GPIO_Port GPIOB
+#define ButtonLeft_Pin GPIO_PIN_12
+#define ButtonLeft_GPIO_Port GPIOA
+#define Led_Pin GPIO_PIN_3
+#define Led_GPIO_Port GPIOB
 #define ButtonRight_Pin GPIO_PIN_4
 #define ButtonRight_GPIO_Port GPIOB
 #define ButtonTop_Pin GPIO_PIN_5
 #define ButtonTop_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+
+
 uint64_t getTicks(void);
+
+void Timer2_IRQHandler(void);
+void Barrel_IRQHandler(void);
+void Carriage_IRQHandler(void);
 
 /* USER CODE END Private defines */
 

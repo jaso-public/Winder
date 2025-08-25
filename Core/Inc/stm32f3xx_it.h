@@ -55,8 +55,12 @@ void SVC_Handler(void);
 void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
+void EXTI3_IRQHandler(void);
 void TIM1_BRK_TIM15_IRQHandler(void);
 void TIM2_IRQHandler(void);
+void TIM3_IRQHandler(void);
+void TIM6_DAC1_IRQHandler(void);
+void TIM7_DAC2_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

@@ -57,6 +57,9 @@
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim6;
+extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim15;
 /* USER CODE BEGIN EV */
 
@@ -201,6 +204,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles EXTI line 3 interrupt.
+  */
+void EXTI3_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI3_IRQn 0 */
+
+  /* USER CODE END EXTI3_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(LimitSwitch_Pin);
+  /* USER CODE BEGIN EXTI3_IRQn 1 */
+
+  /* USER CODE END EXTI3_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 break and TIM15 interrupts.
   */
 void TIM1_BRK_TIM15_IRQHandler(void)
@@ -221,12 +238,57 @@ void TIM1_BRK_TIM15_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-
+	Timer2_IRQHandler();
+	return;
   /* USER CODE END TIM2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim2);
   /* USER CODE BEGIN TIM2_IRQn 1 */
 
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+
+  /* USER CODE END TIM3_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim3);
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM6 global and DAC1 underrun error interrupts.
+  */
+void TIM6_DAC1_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM6_DAC1_IRQn 0 */
+	Barrel_IRQHandler();
+	return;
+  /* USER CODE END TIM6_DAC1_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim6);
+  /* USER CODE BEGIN TIM6_DAC1_IRQn 1 */
+
+  /* USER CODE END TIM6_DAC1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM7 global and DAC2 underrun error interrupts.
+  */
+void TIM7_DAC2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM7_DAC2_IRQn 0 */
+	Carriage_IRQHandler();
+	return;
+  /* USER CODE END TIM7_DAC2_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim7);
+  /* USER CODE BEGIN TIM7_DAC2_IRQn 1 */
+
+  /* USER CODE END TIM7_DAC2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
