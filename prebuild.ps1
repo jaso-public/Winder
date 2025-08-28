@@ -1,66 +1,70 @@
-# Fail fast on script errors (optional)
+# prebuild.ps1
+# Windows PowerShell equivalent of your mac script
+
 $ErrorActionPreference = 'Stop'
 
-# Go to the Git root
+# Ensure we're inside a Git repo and cd to the repo root
 $gitRoot = git rev-parse --show-toplevel 2>$null
 if (-not $gitRoot) {
-    Write-Error "Not a git repository"
+    Write-Error "Not a Git repository (run from within your project's Git repo)."
     exit 1
 }
 Set-Location $gitRoot
 
 # Base Git hash
-$VERSION = git rev-parse --short=8 HEAD
+$VERSION = (git rev-parse --short=8 HEAD).Trim()
 
+# Check for dirty state
 $IS_DIRTY = $false
 
-# ---- Uncommitted/staged changes (use exit code) ----
-git diff --quiet         >$null 2>&1
-$wc1 = $LASTEXITCODE     # 0 = clean, 1 = changes
-git diff --cached --quiet >$null 2>&1
-$wc2 = $LASTEXITCODE
-
-if (($wc1 -ne 0) -or ($wc2 -ne 0)) {
-    Write-Warning "You have uncommitted or staged changes."
+# Uncommitted changes
+git diff --quiet | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "⚠️  WARNING: You have uncommitted changes!"
     $IS_DIRTY = $true
 }
 
-# ---- Untracked files ----
+# Staged but uncommitted changes
+git diff --cached --quiet | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "⚠️  WARNING: You have staged (but uncommitted) changes!"
+    $IS_DIRTY = $true
+}
+
+# Untracked files
 $UNTRACKED = git ls-files --others --exclude-standard
 if ($UNTRACKED) {
-    Write-Warning "You have untracked files:"
+    Write-Warning "⚠️  WARNING: You have untracked files:"
     $UNTRACKED | ForEach-Object { Write-Warning "  $_" }
     $IS_DIRTY = $true
 }
 
-# ---- Unpushed commits (use exit code) ----
-$UPSTREAM = (git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null)
-if ($LASTEXITCODE -eq 0 -and $UPSTREAM) {
-    $UPSTREAM = $UPSTREAM.Trim()
-    git diff --quiet "$UPSTREAM"..HEAD >$null 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "You have commits not pushed to '$UPSTREAM'."
+# Check for unpushed commits
+$UPSTREAM = git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
+if (-not $UPSTREAM) {
+    Write-Warning "⚠️  WARNING: No upstream branch set. Cannot check for unpushed commits."
+    $IS_DIRTY = $true
+} else {
+    $ahead = [int](git rev-list --count "$UPSTREAM..HEAD")
+    if ($ahead -gt 0) {
+        Write-Warning "⚠️  WARNING: You have $ahead commit(s) not pushed to '$UPSTREAM'."
         $IS_DIRTY = $true
     }
+}
+
+# Add ** suffix if dirty
+if ($IS_DIRTY) { $VERSION = "$VERSION**" }
+
+# Output version info file (same path as your mac script)
+$headerPath = Join-Path $gitRoot 'Core/Inc/gitversion.h'
+"#define GIT_HASH `"$VERSION`"" | Set-Content -Path $headerPath -Encoding ascii
+
+# Touch main.c to force rebuild (create if missing)
+$mainPath = Join-Path $gitRoot 'Core/Src/main.c'
+if (Test-Path $mainPath) {
+    (Get-Item $mainPath).LastWriteTime = Get-Date
 } else {
-    Write-Warning "No upstream branch set. Cannot check for unpushed commits."
-    $IS_DIRTY = $true
+    New-Item -ItemType File -Path $mainPath -Force | Out-Null
 }
 
-# ---- Add ** suffix if dirty ----
-if ($IS_DIRTY) {
-    $VERSION = "${VERSION}**"
-}
-
-# ---- Write header (ensure folder exists) ----
-$headerPath = Join-Path $gitRoot "Core\Inc\gitversion.h"
-New-Item -ItemType Directory -Path (Split-Path $headerPath) -Force | Out-Null
-"#define GIT_HASH `"$VERSION`"" | Out-File -Encoding ASCII -NoNewline $headerPath
-
-# ---- Touch Core/Src/main.c ----
-$mainFile = Join-Path $gitRoot "Core\Src\main.c"
-if (Test-Path $mainFile) {
-    (Get-Item $mainFile).LastWriteTime = Get-Date
-}
-
-Write-Output "GIT HASH: $VERSION"
+Write-Host "GIT HASH: $VERSION"
