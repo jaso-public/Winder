@@ -308,7 +308,11 @@ int main(void)
 
 	steppersInitAll();
 
-
+    stepperStart(&barrelStepper, 500, 0);
+    stepperStart(&carriageStepper, 900, 0);
+	HAL_Delay(1000);
+    barrelStepper.desiredSpeed = 0.0;
+    carriageStepper.desiredSpeed = 0.0;
 
   /* USER CODE END 2 */
 

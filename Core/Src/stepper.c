@@ -14,8 +14,8 @@ void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration)
 {
 
     s->config                      = cfg;
-    s->currentSteps             = 0;
-    s->desiredSteps             = 0;
+    s->currentSteps                = 0;
+    s->desiredSteps                = 0;
     s->currentSpeed                = 0.0f;
     s->speedSquared                = 0.0f;
     s->desiredSpeed                = 0;
@@ -66,6 +66,9 @@ void computeNextStepperEvent(Stepper *s) {
 
     StepperConfiguration *cfg = s->config;
 
+    float ds = s->desiredSpeed;
+    float ss = s->currentSpeed;
+
     if (s->desiredSteps > 0) {
         // we want to get the stepper to a particular Steps with a velocity of zero
         uint32_t stepsToStop = (uint32_t) ceilf(s->speedSquared / s->acceleration2x);
@@ -74,7 +77,7 @@ void computeNextStepperEvent(Stepper *s) {
         }
     }
 
-    if (s->currentSpeed < s->desiredSpeed) {
+    if (s->currentSpeed < ds) {
         // we need to accelerate to reach the desired speed
         s->speedSquared += s->acceleration2x;
         s->currentSpeed = sqrtf(s->speedSquared);
@@ -84,12 +87,12 @@ void computeNextStepperEvent(Stepper *s) {
             s->speedSquared = s->currentSpeed * s->currentSpeed;
         }
 
-    } else if (s->currentSpeed > s->desiredSpeed) {
+    } else if (s->currentSpeed > ds) {
         // we need to brake to reach the desired speed
         s->speedSquared -= s->acceleration2x;
-        if (s->speedSquared <= 0.0f) {
-            s->speedSquared = 0.0f;
-            s->currentSpeed = 0.0f;
+        if (s->speedSquared <= s->desiredSpeed) {
+            s->currentSpeed = s->desiredSpeed;
+            s->speedSquared = s->currentSpeed * s->currentSpeed;
         } else {
             s->currentSpeed = sqrtf(s->speedSquared);
         }
@@ -103,6 +106,8 @@ void computeNextStepperEvent(Stepper *s) {
     if (s->currentSpeed == 0.0) {
         s->speedSquared = 0.0f;
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
+        printf("sdfsdfsdf\r\n");
+        printf("\r\n\ndesiredSpeed: %.1f s->acceleration2x:%.1f s->currentSpeed:%.1f startSpeed:%.1f \r\n", ds, s->acceleration2x, s->currentSpeed, ss);
         return;
     }
 

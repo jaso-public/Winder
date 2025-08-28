@@ -332,39 +332,45 @@ void moveCarriage() {
     while(!exitting) {
         updateButtonState(&bs);
 
-        if(isLeft() && isRight()) exitting = 1;
+        if(isLeft() && isRight()) break;
 
         if(carriageStepper.currentSpeed == 0.0f) {
             running = 0;
         }
 
         if(newPress(&bs.left) && !running) {
-             running = 1;
+            running = 1;
             HAL_GPIO_WritePin(carriageStepper.config->directionPort, carriageStepper.config->directionPin, GPIO_PIN_SET);
             stepperStart(&carriageStepper, 1000, 0);
+            printf("left %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
         }
 
         if(newPress(&bs.right) && !running) {
             running = 1;
             HAL_GPIO_WritePin(carriageStepper.config->directionPort, carriageStepper.config->directionPin, GPIO_PIN_RESET);
             stepperStart(&carriageStepper, 1000, 0);
+            printf("right %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
         }
 
         if(newPress(&bs.center)) {
             carriageStepper.desiredSpeed = 0.0f;
+            printf("center %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
         }
 
         if(newPress(&bs.top)) {
-             carriageStepper.desiredSpeed *= 5;
+             carriageStepper.desiredSpeed *= 1.1;
+             printf("top %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
         }
 
         if(newPress(&bs.bottom)) {
-            carriageStepper.desiredSpeed /= 5;
+            carriageStepper.desiredSpeed /= 1.1;
+            printf("bottom %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
         }
-
-        carriageStepper.desiredSpeed = 0.0f;
-        while( carriageStepper.currentSpeed > 0.0f ) {}
 	}
+
+    carriageStepper.desiredSpeed = 0.0f;
+    while( carriageStepper.currentSpeed > 0.0f ) {}
+
 }
 
 
