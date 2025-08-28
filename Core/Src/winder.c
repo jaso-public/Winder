@@ -322,7 +322,7 @@ void randomFlashing() {
 		}
 	}
 
-void moveCarriage() {
+void moveStepper(Stepper* s) {
     uint8_t exitting = 0;
     uint8_t running = 0;
     ButtonState bs;
@@ -334,42 +334,42 @@ void moveCarriage() {
 
         if(isLeft() && isRight()) break;
 
-        if(carriageStepper.currentSpeed == 0.0f) {
+        if(s->currentSpeed == 0.0f) {
             running = 0;
         }
 
         if(newPress(&bs.left) && !running) {
             running = 1;
-            HAL_GPIO_WritePin(carriageStepper.config->directionPort, carriageStepper.config->directionPin, GPIO_PIN_SET);
-            stepperStart(&carriageStepper, 1000, 0);
-            printf("left %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
+            HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_SET);
+            stepperStart(s, 1000, 0);
+            printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
         }
 
         if(newPress(&bs.right) && !running) {
             running = 1;
-            HAL_GPIO_WritePin(carriageStepper.config->directionPort, carriageStepper.config->directionPin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_RESET);
             stepperStart(&carriageStepper, 1000, 0);
-            printf("right %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
+            printf("right %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
         }
 
         if(newPress(&bs.center)) {
-            carriageStepper.desiredSpeed = 0.0f;
-            printf("center %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
+            s->desiredSpeed = 0.0f;
+            printf("center %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
         }
 
         if(newPress(&bs.top)) {
-             carriageStepper.desiredSpeed *= 1.1;
-             printf("top %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
+             s->desiredSpeed *= 1.1;
+             printf("top %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
         }
 
         if(newPress(&bs.bottom)) {
-            carriageStepper.desiredSpeed /= 1.1;
-            printf("bottom %.1f %.1f\r\n", carriageStepper.desiredSpeed, carriageStepper.currentSpeed);
+            s->desiredSpeed /= 1.1;
+            printf("bottom %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
         }
 	}
 
-    carriageStepper.desiredSpeed = 0.0f;
-    while( carriageStepper.currentSpeed > 0.0f ) {}
+    s->desiredSpeed = 0.0f;
+    while( s->currentSpeed > 0.0f ) {}
 
 }
 
@@ -438,6 +438,7 @@ int main_menu(char* date, char* time) {
     char* prompt = "Select:";
     char* selections[] = {
             "Move Carriage",
+            "Move Barrel",
             "Barrel Profile 1",
             "Barrel Profile 2",
             "Test Lights",
@@ -479,7 +480,8 @@ int main_menu(char* date, char* time) {
 
             display_menu(prompt, selections, count, current, start);
 
-            if(strcmp(selections[current], "Move Carriage") == 0) moveCarriage();
+            if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
+            if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 
 
             if(strcmp(selections[current], "Test Lights") == 0) testLights();
