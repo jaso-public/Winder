@@ -322,12 +322,24 @@ void randomFlashing() {
 		}
 	}
 
+void showDisplay(Stepper* s, uint8_t left) {
+    char buffer[20];
+    lcd_clear();
+    lcd_write_string(left?"Left ":"Right ");
+    sprintf(buffer, "%.1f", s->desiredSpeed);
+    lcd_write_string(buffer);
+}
+
 void moveStepper(Stepper* s) {
     uint8_t exitting = 0;
     uint8_t running = 0;
+    uint8_t left = 0;
+
     ButtonState bs;
     initializeButtonState(&bs);
 
+    lcd_clear();
+    lcd_write_string("Choose a direction");
 
     while(!exitting) {
         updateButtonState(&bs);
@@ -343,28 +355,36 @@ void moveStepper(Stepper* s) {
             HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_SET);
             stepperStart(s, 1000, 0);
             printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            left = 1;
+            showDisplay(s, left);
+
         }
 
         if(newPress(&bs.right) && !running) {
             running = 1;
             HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_RESET);
-            stepperStart(&carriageStepper, 1000, 0);
+            stepperStart(s, 1000, 0);
             printf("right %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            left = 0;
+            showDisplay(s, left);
         }
 
         if(newPress(&bs.center)) {
             s->desiredSpeed = 0.0f;
             printf("center %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            showDisplay(s, left);
         }
 
         if(newPress(&bs.top)) {
              s->desiredSpeed *= 1.1;
              printf("top %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+             showDisplay(s, left);
         }
 
         if(newPress(&bs.bottom)) {
             s->desiredSpeed /= 1.1;
             printf("bottom %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            showDisplay(s, left);
         }
 	}
 
