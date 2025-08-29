@@ -47,6 +47,8 @@ void initializeButtonState(ButtonState *bs);
 void updateButtonState(ButtonState *bs);
 int newPress(Button *b);
 
+void setLight(int color);
+
 int isLeft();
 int isRight();
 int isTop();

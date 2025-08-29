@@ -197,6 +197,8 @@ static StepperConfiguration carriageConfig = {
 };
 
 Stepper barrelStepper, carriageStepper;
+ButtonState bs;
+
 
 void steppersInitAll(void)
 {
@@ -295,55 +297,39 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  steppersInitAll();
+
 	// get the date as mm/dd/yy
 	char date[9];
 	getShortCompileDate(date);
 	printf("Hello from the Winder -- Build: %s %s\r\n", date, __TIME__);
 
+	initializeButtonState(&bs);
+    setLight(RED);
+
 	lcd_init(&hi2c1);
 	lcd_clear();
-//
-//	lcd_write_string("Winder -- ");
-//	lcd_write_string(__TIME__);
+	lcd_write_string("*** Jaso Winder ***");
+	lcd_set_cursor(0, 1);
+	lcd_write_string(date);
+	lcd_write_string(" ");
+	lcd_write_string(__TIME__);
+    lcd_set_cursor(0, 2);
+    lcd_write_string("Git Hash: ");
+    lcd_write_string(GIT_HASH);
+    lcd_set_cursor(0, 3);
+    lcd_write_string("Press C to start");
 
-	steppersInitAll();
+    while(1) {
+        updateButtonState(&bs);
+        if(newPress(&bs.center)) break;
+    }
 
-    stepperStart(&barrelStepper, 500, 0);
-    stepperStart(&carriageStepper, 900, 0);
-	HAL_Delay(1000);
-    barrelStepper.desiredSpeed = 0.0;
-    carriageStepper.desiredSpeed = 0.0;
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-//	while(1) {
-//		HAL_GPIO_WritePin( Led_GPIO_Port, Led_Pin, GPIO_PIN_RESET);
-//		HAL_Delay(100);
-//		HAL_GPIO_WritePin( Led_GPIO_Port, Led_Pin, GPIO_PIN_SET);
-//		HAL_Delay(100);
-//	}
-//
-//
-//	while(1) {
-//
-//
-//		for(int i=0 ; i<5000 ; i++) {
-//			HAL_GPIO_WritePin( CarriagePulse_GPIO_Port, CarriagePulse_Pin, GPIO_PIN_RESET);
-//			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_RESET);
-//			HAL_Delay(1);
-//			HAL_GPIO_WritePin( CarriagePulse_GPIO_Port, CarriagePulse_Pin, GPIO_PIN_SET);
-//			HAL_GPIO_WritePin( BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
-//			HAL_Delay(1);
-//		}
-//
-//		HAL_GPIO_TogglePin( CarriageDir_GPIO_Port, CarriageDir_Pin);
-//		HAL_GPIO_TogglePin( BarrelDir_GPIO_Port, BarrelDir_Pin);
-//	}
-//
-//
 
 	main_menu(date, __TIME__);
 

@@ -29,7 +29,7 @@ extern Stepper carriageStepper;
 
 #define DEBOUNCE_DELAY 20
 
-ButtonState bs;
+extern ButtonState bs;
 
 int isLeft() {
 	return HAL_GPIO_ReadPin(ButtonLeft_GPIO_Port, ButtonLeft_Pin) == 0;
@@ -335,8 +335,6 @@ void moveStepper(Stepper* s) {
     uint8_t running = 0;
     uint8_t left = 0;
 
-    ButtonState bs;
-    initializeButtonState(&bs);
 
     lcd_clear();
     lcd_write_string("Choose a direction");
@@ -393,6 +391,31 @@ void moveStepper(Stepper* s) {
 
 }
 
+void displayOpto(int opt) {
+    lcd_clear();
+    lcd_write_string("Opto Sensor Test");
+    lcd_set_cursor(0, 1);
+    lcd_write_string(opt ? "Sensor is High" : "Sensor is Low");
+    lcd_set_cursor(0, 2);
+    lcd_write_string("Press C to exit");
+}
+
+void optoTest() {
+
+    int state = HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == GPIO_PIN_SET;
+    displayOpto(state);
+
+    while(1) {
+        updateButtonState(&bs);
+
+        int newState = HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == GPIO_PIN_SET;
+        if(state != newState) {
+            state = newState;
+            displayOpto(state);
+        }
+        if(newPress(&bs.center)) break;
+    }
+}
 
 	void display_menu(char* prompt, char** options, int count, int current, int start) {
 
@@ -466,6 +489,7 @@ int main_menu(char* date, char* time) {
             "Test Right Limit",
             "Random Flashing",
             "Button Test",
+            "Opto Test",
             "Display Info"
     };
 
@@ -505,6 +529,7 @@ int main_menu(char* date, char* time) {
 
 
             if(strcmp(selections[current], "Test Lights") == 0) testLights();
+            if(strcmp(selections[current], "Opto Test") == 0) optoTest();
             if(strcmp(selections[current], "Random Flashing") == 0) randomFlashing();
             if(strcmp(selections[current], "Button Test") == 0) buttonTest();
             if(strcmp(selections[current], "Display Info") == 0) displayInfo(date, time);
