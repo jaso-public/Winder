@@ -256,6 +256,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 }
 
+void halt(char* message) {
+    lcd_clear();
+    lcd_write_string(message);
+    printf("%s\r\n", message);
+
+    // TODO stop interrupts and timers.
+
+    while(1) {}
+}
 /* USER CODE END 0 */
 
 /**

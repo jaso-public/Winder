@@ -335,6 +335,7 @@ void moveStepper(Stepper* s) {
     uint8_t running = 0;
     uint8_t left = 0;
 
+    initializeButtonState(&bs);
 
     lcd_clear();
     lcd_write_string("Choose a direction");
@@ -350,8 +351,7 @@ void moveStepper(Stepper* s) {
 
         if(newPress(&bs.left) && !running) {
             running = 1;
-            HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_SET);
-            stepperStart(s, 1000, 0);
+            stepperStart(s, 1000, CW);
             printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             left = 1;
             showDisplay(s, left);
@@ -360,8 +360,7 @@ void moveStepper(Stepper* s) {
 
         if(newPress(&bs.right) && !running) {
             running = 1;
-            HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_RESET);
-            stepperStart(s, 1000, 0);
+            stepperStart(s, 1000, CCW);
             printf("right %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             left = 0;
             showDisplay(s, left);
@@ -391,6 +390,27 @@ void moveStepper(Stepper* s) {
 
 }
 
+void homeCarriage() {
+    int state = HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin);
+
+    stepperStart(&carriageStepper, 1000, (state==GPIO_PIN_SET) ? CW : CCW);
+    while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == state) {}
+
+    int pos = carriageStepper.currentPosition;
+    carriageStepper.desiredSpeed = 0.0f;
+
+    while(carriageStepper.mode != STOPPED) {}
+
+    moveToPosition(&carriageStepper, 100, pos);
+
+    while(carriageStepper.mode != STOPPED) {}
+
+
+    printf("carriageStepper.currentPosition:%ld\r\n", carriageStepper.currentPosition);
+
+
+}
+
 void displayOpto(int opt) {
     lcd_clear();
     lcd_write_string("Opto Sensor Test");
@@ -417,61 +437,61 @@ void optoTest() {
     }
 }
 
-	void display_menu(char* prompt, char** options, int count, int current, int start) {
+void display_menu(char* prompt, char** options, int count, int current, int start) {
 
-		setLight(YELLOW);
+    setLight(YELLOW);
 
-		lcd_clear();
-		lcd_write_string(prompt);
-		int index = 1;
+    lcd_clear();
+    lcd_write_string(prompt);
+    int index = 1;
 
-		printf("\r\n\n%s\r\n", prompt);
+    printf("\r\n\n%s\r\n", prompt);
 
-		int stop = start+3;
-		if(stop > count) stop = count;
+    int stop = start+3;
+    if(stop > count) stop = count;
 
-		for(int i=start ; i<stop ; i++) {
-			lcd_set_cursor(0,index++);
-			if(i == current) {
-				printf("** ");
-				lcd_write_string("** ");
-			} else {
-				printf("   ");
-				lcd_write_string("   ");
+    for(int i=start ; i<stop ; i++) {
+        lcd_set_cursor(0,index++);
+        if(i == current) {
+            printf("** ");
+            lcd_write_string("** ");
+        } else {
+            printf("   ");
+            lcd_write_string("   ");
 
-			}
+        }
 
-			printf("%s\r\n", options[i]);
-			lcd_write_string(options[i]);
-		}
-	}
+        printf("%s\r\n", options[i]);
+        lcd_write_string(options[i]);
+    }
+}
 
-	void displayInfo(char* date, char* time) {
+void displayInfo(char* date, char* time) {
 
-		lcd_clear();
-		lcd_set_cursor(0, 0);
-		lcd_write_string("Winder ");
-		lcd_write_string(date);
+    lcd_clear();
+    lcd_set_cursor(0, 0);
+    lcd_write_string("Winder ");
+    lcd_write_string(date);
 
-		lcd_set_cursor(7, 1);
-		lcd_write_string(__TIME__);
+    lcd_set_cursor(7, 1);
+    lcd_write_string(__TIME__);
 
-		lcd_set_cursor(7, 2);
-		lcd_write_string(GIT_HASH);
+    lcd_set_cursor(7, 2);
+    lcd_write_string(GIT_HASH);
 
-		lcd_set_cursor(0, 3);
-		lcd_write_string("Center to continue. ");
-
-
-		ButtonState bs;
-	    initializeButtonState(&bs);
+    lcd_set_cursor(0, 3);
+    lcd_write_string("Center to continue. ");
 
 
-		while(1) {
-	        updateButtonState(&bs);
-	        if(newPress(&bs.center)) return;
-		}
-	}
+    ButtonState bs;
+    initializeButtonState(&bs);
+
+
+    while(1) {
+        updateButtonState(&bs);
+        if(newPress(&bs.center)) return;
+    }
+}
 
 
 
@@ -480,6 +500,7 @@ int main_menu(char* date, char* time) {
 
     char* prompt = "Select:";
     char* selections[] = {
+            "Home Carriage",
             "Move Carriage",
             "Move Barrel",
             "Barrel Profile 1",
@@ -524,6 +545,7 @@ int main_menu(char* date, char* time) {
 
             display_menu(prompt, selections, count, current, start);
 
+            if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 

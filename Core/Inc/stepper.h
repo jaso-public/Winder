@@ -14,18 +14,6 @@
 #include "stm32f3xx_hal.h"
 
 
-// stepper.h
-#ifndef STEPPER_DEBUG
-#define STEPPER_DEBUG 0
-#endif
-
-#if STEPPER_DEBUG
-  #include <stdio.h>
-  #define STEPPER_NAME(s) ((s)->config->stepperName ? (s)->config->stepperName : "?")
-  #define DBG(s, fmt, ...)  printf("[STEP:%s] " fmt "\r\n", STEPPER_NAME(s), ##__VA_ARGS__)
-#else
-  #define DBG(s, fmt, ...)  do{}while(0)
-#endif
 
 // ----- timing/constants -----
 #define TIMER_CLOCK_HZ   36000000.0   // TIM2 @ 36 MHz
@@ -39,6 +27,16 @@
 
 // provided by you
 uint64_t getTicks(void);
+void halt(char* message);
+
+// direction of rotation
+#define CW 12
+#define CCW 13
+
+// state of stepper
+#define STOPPED 1
+#define VELOCITY 2
+#define POSITION 3
 
 
 typedef struct {
@@ -70,20 +68,23 @@ typedef struct {
 
     uint32_t lastPulseTick;               // last scheduled rising tick (TIM2 domain)
 
-    volatile float currentSpeed;                   // steps/s
+    volatile float currentSpeed;          // steps/s
     volatile float speedSquared;
-    volatile float desiredSpeed;                   // steps/s (cap)
-    float acceleration2x;                   // steps/s^2
+    volatile float desiredSpeed;          // steps/s (cap)
+    float acceleration2x;                 // steps/s^2
 
-    int32_t currentSteps;              // steps
-    int32_t desiredSteps;              // steps
+    int mode;                             // one of STOPPED, POSITION, VELOCITY
+    int32_t currentPosition;
+    int32_t desiredPosition;
+    int32_t stepIncrement;                // +1 or -1
 
 } Stepper;
 
 // ----- api -----
 void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration);
-void stepperInitTimebase(Stepper *s);
-void stepperStart(Stepper *s, float desiredSpeed, int32_t desiredPosition);
+void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition);
+void stepperStart(Stepper *s, float desiredSpeed, int direction);
+
 void computeNextStepperEvent(Stepper *s);
 void stepperHandleIrq(Stepper *s);
 
