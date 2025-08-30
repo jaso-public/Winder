@@ -393,7 +393,7 @@ void moveStepper(Stepper* s) {
 void homeCarriage() {
     int state = HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin);
 
-    stepperStart(&carriageStepper, 1000, (state==GPIO_PIN_SET) ? CW : CCW);
+    stepperStart(&carriageStepper, 1000, (state==GPIO_PIN_SET) ? CCW : CW);
     while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == state) {}
 
     int pos = carriageStepper.currentPosition;
