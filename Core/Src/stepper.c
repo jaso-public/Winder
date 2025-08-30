@@ -82,9 +82,11 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction) {
 
     if(direction == CW) {
         HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_SET);
+        printf("stating stepper CW\r\n");
         s->stepIncrement = 1;
     } else {
         HAL_GPIO_WritePin(s->config->directionPort, s->config->directionPin, GPIO_PIN_RESET);
+        printf("stating stepper CCW\r\n");
         s->stepIncrement = -1;
     }
 
