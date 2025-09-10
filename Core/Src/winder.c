@@ -397,7 +397,7 @@ void homeCarriage() {
         moveToPosition(&carriageStepper, 5000, 20000);
     }
 
-    stepperStart(&carriageStepper, 1000, CW);
+    stepperStart(&carriageStepper, 1000, CCW);
 
 
     while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {}
