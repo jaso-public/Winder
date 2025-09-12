@@ -390,27 +390,57 @@ void moveStepper(Stepper* s) {
 
 }
 
+
+void moveToPositionAndWait(int speed, int position) {
+    moveToPosition(&carriageStepper, speed, position);
+    while(carriageStepper.mode != STOPPED) {}
+}
+
+void waitForOptical(int speed) {
+    // move right until the optical sensor trips
+    stepperStart(&carriageStepper, speed, CCW);
+    while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {}
+    long oldValue = carriageStepper.currentPosition;
+    carriageStepper.currentPosition = 0;
+    carriageStepper.desiredSpeed = 0;
+    while(carriageStepper.mode != STOPPED) {}
+    printf("oldValue: %ld   finalPosition: %ld\n", oldValue, carriageStepper.currentPosition);
+    moveToPositionAndWait(100, 0);
+}
+
 void homeCarriage() {
+    lcd_clear();
+    lcd_write_string("Home the carriage");
+    lcd_set_cursor(0, 1);
+    lcd_write_string("Moving to the right");
 
     // move left to start, no matter what
     carriageStepper.currentPosition = 0;
-    moveToPosition(&carriageStepper, 5000, 20000);
-    while(carriageStepper.mode != STOPPED) {}
+    moveToPositionAndWait(5000, 20000);
+
+    lcd_clear();
+    lcd_write_string("Home the carriage");
+    lcd_set_cursor(0, 1);
+    lcd_write_string("High speed to sensor");
 
     // move right until the optical sensor trips
-    stepperStart(&carriageStepper, 1000, CCW);
-    while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {}
+    waitForOptical(5000);
 
-    // grab the position when the sensor trips, and then stop moving
-    int pos = carriageStepper.currentPosition;
-    carriageStepper.desiredSpeed = 0.0f;
-    while(carriageStepper.mode != STOPPED) {}
 
-    // move back to the position when the sensor tripped
-    moveToPosition(&carriageStepper, 100, pos);
-    while(carriageStepper.mode != STOPPED) {}
+    lcd_clear();
+    lcd_write_string("Home the carriage");
+    lcd_set_cursor(0, 1);
+    lcd_write_string("move away from sensor");
 
-    carriageStepper.currentPosition = 0;
+    moveToPositionAndWait(1000, 1000);
+
+
+    lcd_clear();
+    lcd_write_string("Home the carriage");
+    lcd_set_cursor(0, 1);
+    lcd_write_string("Slow speed to sensor");
+
+    waitForOptical(250);
 }
 
 void displayOpto(int opt) {
