@@ -43,8 +43,10 @@ void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition) {
     StepperConfiguration *cfg = s->config;
     if(s->mode != STOPPED) halt("BUG: moveToPosition() state not STOPPED");
 
+    printf("moveToPosition desiredPosition:%ld currentPosition:%ld\r\n", desiredPosition, s->currentPosition);
+
     if(desiredPosition == s->currentPosition) {
-        printf("moveToPosition desiredPosition:%ld == currentPosition:%ld -- not moving\r\n", desiredPosition, s->currentPosition);
+        printf("desiredPosition:%ld == currentPosition:%ld -- not moving\r\n", desiredPosition, s->currentPosition);
         return;
     }
 
@@ -109,7 +111,7 @@ void computeNextStepperEvent(Stepper *s) {
         uint32_t stepsToStop = (uint32_t) ceilf(s->speedSquared / s->acceleration2x);
         int32_t stepsRemaining = s->desiredPosition - s->currentPosition;
         if(stepsRemaining < 0) stepsRemaining = -stepsRemaining;
-        if (stepsRemaining < stepsToStop) {
+        if (stepsRemaining <= stepsToStop) {
             s->desiredSpeed = 0.0f;
         }
     }
