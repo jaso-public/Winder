@@ -608,7 +608,7 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 
-            if(strcmp(selections[current], "ReadEncoder") == 0) readEncoder();
+            if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();
 
             if(strcmp(selections[current], "Test Lights") == 0) testLights();
             if(strcmp(selections[current], "Opto Test") == 0) optoTest();
