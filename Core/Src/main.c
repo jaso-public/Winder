@@ -166,6 +166,9 @@ uint64_t getTicks(void) {
 	return count;
 }
 
+int32_t readEncoderValue() {
+    return __HAL_TIM_GET_COUNTER(&htim1);
+}
 
 // configs (local to main)
 static StepperConfiguration barrelConfig = {

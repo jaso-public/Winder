@@ -93,6 +93,7 @@ void Error_Handler(void);
 
 
 uint64_t getTicks(void);
+int32_t readEncoderValue();
 
 void Timer2_IRQHandler(void);
 void Barrel_IRQHandler(void);

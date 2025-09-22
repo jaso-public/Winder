@@ -167,6 +167,32 @@ void randomFlashing() {
 }
 
 
+void readEncoder() {
+
+
+    lcd_clear();
+    lcd_write_string("Read Encoder");
+
+
+    lcd_set_cursor(0, 3);
+    lcd_write_string("Left & Right to Exit");
+
+
+    while (1) {
+        uint32_t count = readEncoderValue();
+        char buffer[40];
+        sprintf(buffer, "count: %ld   ", count);
+
+        lcd_set_cursor(0, 1);
+        lcd_write_string(buffer);
+
+        for(int i=0 ; i<200 ; i++) {
+            if(isLeft() && isRight()) return;
+            HAL_Delay(1);
+        }
+    }
+}
+
 
 	void moveLoop() {
 
@@ -535,6 +561,7 @@ int main_menu(char* date, char* time) {
             "Home Carriage",
             "Move Carriage",
             "Move Barrel",
+            "Read Encoder",
             "Barrel Profile 1",
             "Barrel Profile 2",
             "Test Lights",
@@ -581,6 +608,7 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 
+            if(strcmp(selections[current], "ReadEncoder") == 0) readEncoder();
 
             if(strcmp(selections[current], "Test Lights") == 0) testLights();
             if(strcmp(selections[current], "Opto Test") == 0) optoTest();
