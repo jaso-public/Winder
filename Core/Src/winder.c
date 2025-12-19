@@ -89,7 +89,7 @@ void initializeButtonState(ButtonState *bs) {
 }
 
 void updateButtonState(ButtonState *bs) {
-    uint64_t now = getTicks();
+    uint64_t now = TIM1->CNT;
     checkButton(&bs->left, isLeft(), now);
     checkButton(&bs->right, isRight(), now);
     checkButton(&bs->center, isCenter(), now);
@@ -194,120 +194,6 @@ void readEncoder() {
 }
 
 
-	void moveLoop() {
-
-
-//		uint8_t exitting = 0;
-//
-//		uint8_t  L_pressed = 0;
-//		uint64_t L_time = 0;
-//
-//		uint8_t  R_pressed = 0;
-//		uint64_t R_time = 0;
-//
-//		uint8_t  T_pressed = 0;
-//		uint64_t T_time = 0;
-//
-//		uint8_t  B_pressed = 0;
-//		uint64_t B_time = 0;
-//
-//		uint8_t  C_pressed = isCenter();
-//		uint64_t C_time = getTicks();
-//
-
-//		// we have time to checks things before the event will occur
-//		checkButton(&L_pressed, &L_time, isLeft(), now);
-//		checkButton(&R_pressed, &R_time, isRight(), now);
-//		if(checkButton(&T_pressed, &T_time, isTop(), now)) {
-//			if(T_pressed) s->desired_speed *= 1.1;
-//		}
-//
-//		if(checkButton(&B_pressed, &B_time, isBottom(), now)) {
-//			if(B_pressed) s->desired_speed /= 1.1;
-//		}
-//
-//		if(checkButton(&C_pressed, &C_time, isCenter(), now)) {
-//			if(C_pressed) {
-//				exitting = 1;
-//				s->desired_velocity = 0;
-//			}
-//
-//		}
-
-	}
-
-#define STOPPED 1
-#define ACCELERATE 2
-#define STEADY 3
-#define DECCELERATE 4
-
-	void wait(uint16_t stop) {
-		uint16_t curr = TIM3->CNT;
-		if(curr > stop) {
-			uint16_t prev = curr;
-			while(1) {
-				curr = TIM3->CNT;
-				if(curr < prev) break;
-				prev = curr;
-			}
-		}
-
-		while(TIM3->CNT <= stop) {}
-
-//	HAL_Delay(1);
-	}
-
-	void runStepper() {
-		printf("Entering runStepper\r\n");
-
-		lcd_clear();
-		lcd_write_string("Run Stepper Test");
-		lcd_set_cursor(0, 1);
-
-		uint16_t last = TIM3->CNT;
-		double a = 3000;
-		double vmax = 500;
-		int state = ACCELERATE;
-		double velocity = 0;
-
-		uint32_t pos = 0;
-
-		while(1) {
-			HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
-			last += 180;
-			wait(last);
-			HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_RESET);
-			pos++;
-
-			if(pos==2000) {
-				printf("decel\r\n");
-				state = DECCELERATE;
-			}
-
-			if(state == ACCELERATE) {
-				velocity = sqrt(velocity*velocity + 2.0*a);
-				if(velocity > vmax) {
-					velocity = vmax;
-					state = STEADY;
-				}
-			}
-
-			if(state == DECCELERATE) {
-				double v2 = velocity * velocity - 2 * a;
-				if(v2 < 0) {
-					velocity = 0;
-					state = STOPPED;
-					return;
-				}
-				velocity = sqrt(v2);
-			}
-
-			last += (uint16_t) (TIMER_CLOCK_HZ / velocity);
-			wait(last);
-
-		}
-
-	}
 
 	void buttonTest() {
 

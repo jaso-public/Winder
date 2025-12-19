@@ -61,10 +61,10 @@ void Error_Handler(void);
 #define RedLight_GPIO_Port GPIOF
 #define ButtonCenter_Pin GPIO_PIN_1
 #define ButtonCenter_GPIO_Port GPIOF
-#define OpticalSensor_Pin GPIO_PIN_0
-#define OpticalSensor_GPIO_Port GPIOA
-#define GreenLight_Pin GPIO_PIN_1
-#define GreenLight_GPIO_Port GPIOA
+#define EncoderA_Pin GPIO_PIN_0
+#define EncoderA_GPIO_Port GPIOA
+#define EncoderB_Pin GPIO_PIN_1
+#define EncoderB_GPIO_Port GPIOA
 #define LimitSwitch_Pin GPIO_PIN_3
 #define LimitSwitch_GPIO_Port GPIOA
 #define LimitSwitch_EXTI_IRQn EXTI3_IRQn
@@ -76,6 +76,10 @@ void Error_Handler(void);
 #define BarrelDir_GPIO_Port GPIOB
 #define BarrelPulse_Pin GPIO_PIN_1
 #define BarrelPulse_GPIO_Port GPIOB
+#define OpticalSensor_Pin GPIO_PIN_8
+#define OpticalSensor_GPIO_Port GPIOA
+#define GreenLight_Pin GPIO_PIN_9
+#define GreenLight_GPIO_Port GPIOA
 #define YellowLight_Pin GPIO_PIN_10
 #define YellowLight_GPIO_Port GPIOA
 #define ButtonBottom_Pin GPIO_PIN_11
@@ -92,7 +96,6 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 
 
-uint64_t getTicks(void);
 int32_t readEncoderValue();
 
 void Timer2_IRQHandler(void);

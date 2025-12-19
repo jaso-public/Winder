@@ -25,7 +25,7 @@ void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration)
     s->mode                        = STOPPED;
 
 
-    HAL_GPIO_WritePin(s->config->pulsePort,     s->config->pulsePin,     GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(s->config->pulsePort, s->config->pulsePin, GPIO_PIN_RESET);
 
     // Hard-disable this channel’s compare interrupt and clear any stale flags
 	TIM_HandleTypeDef *htim = s->config->timerHandle;
@@ -154,20 +154,17 @@ void stepperHandleIrq(Stepper *s) {
     StepperConfiguration *cfg = s->config;
     TIM_HandleTypeDef *htim = cfg->timerHandle;
 
-    if (__HAL_TIM_GET_FLAG(htim, cfg->compareFlag) && __HAL_TIM_GET_IT_SOURCE(htim, cfg->compareInterruptSource)) {
+    __HAL_TIM_CLEAR_IT(htim, cfg->compareInterruptSource);
 
-        __HAL_TIM_CLEAR_IT(htim, cfg->compareInterruptSource);
-
-        if (cfg->pulsePort->ODR & cfg->pulsePin) {
-            // FALL: drive low an schedule a low priority interrupt to compute next pulse
-            HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_RESET);
-            s->currentPosition += s->stepIncrement;
-            NVIC_SetPendingIRQ(cfg->computeIrqNumber);
-        } else {
-            // RISE: drive high and schedule the FALL compare
-            HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_SET);
-            *cfg->compareRegister = htim->Instance->CNT + cfg->pulseWidthTicks;
-        }
+    if (cfg->pulsePort->ODR & cfg->pulsePin) {
+        // FALL: drive low an schedule a low priority interrupt to compute next pulse
+        HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_RESET);
+        s->currentPosition += s->stepIncrement;
+        NVIC_SetPendingIRQ(cfg->computeIrqNumber);
+    } else {
+        // RISE: drive high and schedule the FALL compare
+        HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_SET);
+        *cfg->compareRegister = htim->Instance->CNT + cfg->pulseWidthTicks;
     }
 }
 

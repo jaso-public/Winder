@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "utils.h"
 #include "stepper.h"
 
 #include "winder.h"
@@ -58,7 +59,6 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim7;
-TIM_HandleTypeDef htim15;
 
 UART_HandleTypeDef huart2;
 
@@ -72,10 +72,9 @@ static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_TIM15_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_TIM7_Init(void);
+static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -84,14 +83,6 @@ static void MX_TIM3_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-uint64_t twoRaised32 = 1ULL << 32;
-
-volatile uint64_t overflow_count = 0;
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM3)
-		overflow_count += 65536;
-}
 
 // needed to send printf to the serial port
 int __io_putchar(int ch) {
@@ -99,82 +90,16 @@ int __io_putchar(int ch) {
 	return ch;
 }
 
-void getShortCompileDate(char *result) {
-	char *date = __DATE__;  // e.g., "Jul  4 2025"
-
-	strcpy(result, "0-/--/--");
-
-	if (strncmp(date, "Jan", 3) == 0) {
-		result[1] = '1';
-	} else if (strncmp(date, "Feb", 3) == 0) {
-		result[1] = '2';
-	} else if (strncmp(date, "Mar", 3) == 0) {
-		result[1] = '3';
-	} else if (strncmp(date, "Apr", 3) == 0) {
-		result[1] = '4';
-	} else if (strncmp(date, "May", 3) == 0) {
-		result[1] = '5';
-	} else if (strncmp(date, "Jun", 3) == 0) {
-		result[1] = '6';
-	} else if (strncmp(date, "Jul", 3) == 0) {
-		result[1] = '7';
-	} else if (strncmp(date, "Aug", 3) == 0) {
-		result[1] = '8';
-	} else if (strncmp(date, "Sep", 3) == 0) {
-		result[1] = '9';
-	} else if (strncmp(date, "Oct", 3) == 0) {
-		result[0] = '1';
-		result[1] = '0';
-	} else if (strncmp(date, "Nov", 3) == 0) {
-		result[0] = '1';
-		result[1] = '1';
-	} else if (strncmp(date, "Dec", 3) == 0) {
-		result[0] = '1';
-		result[1] = '2';
-	} else {
-		result[0] = 'X';
-		result[1] = 'X';
-	}
-
-	strncpy(&result[3], &date[4], 2);
-	if (result[3] == ' ')
-		result[3] = '0';
-
-	strncpy(&result[6], &date[9], 2);
-}
-
-uint64_t getTicks(void) {
-	uint64_t count;
-	uint16_t tim_cnt;
-	uint64_t of;
-
-	__disable_irq();
-
-	of = overflow_count;
-	tim_cnt = __HAL_TIM_GET_COUNTER(&htim2);
-
-	// Check if overflow happened during this read
-	if (__HAL_TIM_GET_FLAG(&htim2,
-			TIM_FLAG_UPDATE) && __HAL_TIM_GET_IT_SOURCE(&htim2, TIM_IT_UPDATE)) {
-		// Timer overflowed but interrupt not yet handled
-		of += twoRaised32;
-	}
-
-	__enable_irq();
-
-	count = of + tim_cnt;
-	return count;
-}
 
 int32_t readEncoderValue() {
-    return __HAL_TIM_GET_COUNTER(&htim1);
+    return __HAL_TIM_GET_COUNTER(&htim2);
 }
 
 // configs (local to main)
 static StepperConfiguration barrelConfig = {
 	.stepperName            = "Barrel",
-    .timerHandle            = &htim2,
-    .compareRegister        = &TIM2->CCR1,
+    .timerHandle            = &htim1,
+    .compareRegister        = &TIM1->CCR1,
     .compareFlag            = TIM_FLAG_CC1,
     .compareInterruptSource = TIM_IT_CC1,
     .pulsePort              = BarrelPulse_GPIO_Port,
@@ -187,10 +112,10 @@ static StepperConfiguration barrelConfig = {
 
 static StepperConfiguration carriageConfig = {
 	.stepperName            = "Carriage",
-    .timerHandle            = &htim2,
-    .compareRegister        = &TIM2->CCR3,
-    .compareFlag            = TIM_FLAG_CC3,
-    .compareInterruptSource = TIM_IT_CC3,
+    .timerHandle            = &htim3,
+    .compareRegister        = &TIM3->CCR1,
+    .compareFlag            = TIM_FLAG_CC1,
+    .compareInterruptSource = TIM_IT_CC1,
     .pulsePort              = CarriagePulse_GPIO_Port,
     .pulsePin               = CarriagePulse_Pin,
     .directionPort          = CarriageDir_GPIO_Port,
@@ -209,22 +134,17 @@ void steppersInitAll(void)
     stepperInit(&carriageStepper,&carriageConfig,300000.0f );
 
     // Start timers + NVIC (do once)
-    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_TIM1_CLK_ENABLE();
     __HAL_RCC_TIM3_CLK_ENABLE();
     __HAL_RCC_TIM6_CLK_ENABLE();
     __HAL_RCC_TIM7_CLK_ENABLE();
 
-    HAL_TIM_Base_Start_IT(&htim2);
-    HAL_TIM_Base_Start_IT(&htim3);
 
-    __HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
-    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+    HAL_NVIC_SetPriority(TIM1_CC_IRQn,       0, 0);
+    HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
 
-    // Initialize the timer to zero.
-    __HAL_TIM_SET_COUNTER(&htim2, 0);
-
-    HAL_NVIC_SetPriority(TIM2_IRQn,       0, 0);
-    HAL_NVIC_EnableIRQ(TIM2_IRQn);
+    HAL_NVIC_SetPriority(TIM3_IRQn,       0, 0);
+    HAL_NVIC_EnableIRQ(TIM3_IRQn);
 
     HAL_NVIC_SetPriority(TIM6_DAC1_IRQn,  1, 0);
     HAL_NVIC_EnableIRQ(TIM6_DAC1_IRQn);
@@ -237,12 +157,6 @@ void steppersInitAll(void)
 void Timer2_IRQHandler(void) {
 	stepperHandleIrq(&barrelStepper);
 	stepperHandleIrq(&carriageStepper);
-
-	// increment the overflow count
-	if (TIM2->SR & TIM_SR_UIF) {
-		TIM2->SR &= ~TIM_SR_UIF;
-		overflow_count += twoRaised32;
-	}
 }
 
 void Barrel_IRQHandler(void) {
@@ -302,18 +216,23 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
-  MX_TIM1_Init();
-  MX_TIM15_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
+  MX_TIM1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   steppersInitAll();
 
+//  while(1) {
+//      int32_t  val = readEncoderValue();
+//      printf("value = %ld\r\n", val);
+//      HAL_Delay(500);
+//  }
+
 	// get the date as mm/dd/yy
 	char date[9];
-	getShortCompileDate(date);
+	convertDate(__DATE__, date);
 	printf("Hello from the Winder -- Build: %s %s\r\n", date, __TIME__);
 
 	initializeButtonState(&bs);
@@ -458,8 +377,10 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 0 */
 
-  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
 
@@ -471,16 +392,16 @@ static void MX_TIM1_Init(void)
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
-  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 0;
-  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
-  if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -488,6 +409,32 @@ static void MX_TIM1_Init(void)
   sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -509,9 +456,8 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_Encoder_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -522,42 +468,22 @@ static void MX_TIM2_Init(void)
   htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -579,6 +505,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 0 */
 
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
@@ -591,6 +518,15 @@ static void MX_TIM3_Init(void)
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (HAL_TIM_OC_Init(&htim3) != HAL_OK)
   {
     Error_Handler();
@@ -692,82 +628,6 @@ static void MX_TIM7_Init(void)
 }
 
 /**
-  * @brief TIM15 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM15_Init(void)
-{
-
-  /* USER CODE BEGIN TIM15_Init 0 */
-
-  /* USER CODE END TIM15_Init 0 */
-
-  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM15_Init 1 */
-
-  /* USER CODE END TIM15_Init 1 */
-  htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 0;
-  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim15.Init.Period = 65535;
-  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim15.Init.RepetitionCounter = 0;
-  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_Init(&htim15) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_RESET;
-  sSlaveConfig.InputTrigger = TIM_TS_ITR1;
-  if (HAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_OC_ConfigChannel(&htim15, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim15, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM15_Init 2 */
-
-  /* USER CODE END TIM15_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -823,7 +683,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(RedLight_GPIO_Port, RedLight_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GreenLight_Pin|CarriageDir_Pin|CarriagePulse_Pin|YellowLight_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, CarriageDir_Pin|CarriagePulse_Pin|GreenLight_Pin|YellowLight_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, BarrelDir_Pin|BarrelPulse_Pin|Led_Pin, GPIO_PIN_RESET);
@@ -841,24 +701,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(ButtonCenter_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : OpticalSensor_Pin ButtonBottom_Pin ButtonLeft_Pin */
-  GPIO_InitStruct.Pin = OpticalSensor_Pin|ButtonBottom_Pin|ButtonLeft_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pin : LimitSwitch_Pin */
+  GPIO_InitStruct.Pin = LimitSwitch_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(LimitSwitch_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GreenLight_Pin CarriageDir_Pin CarriagePulse_Pin YellowLight_Pin */
-  GPIO_InitStruct.Pin = GreenLight_Pin|CarriageDir_Pin|CarriagePulse_Pin|YellowLight_Pin;
+  /*Configure GPIO pins : CarriageDir_Pin CarriagePulse_Pin GreenLight_Pin YellowLight_Pin */
+  GPIO_InitStruct.Pin = CarriageDir_Pin|CarriagePulse_Pin|GreenLight_Pin|YellowLight_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LimitSwitch_Pin */
-  GPIO_InitStruct.Pin = LimitSwitch_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(LimitSwitch_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BarrelDir_Pin BarrelPulse_Pin Led_Pin */
   GPIO_InitStruct.Pin = BarrelDir_Pin|BarrelPulse_Pin|Led_Pin;
@@ -866,6 +720,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : OpticalSensor_Pin */
+  GPIO_InitStruct.Pin = OpticalSensor_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(OpticalSensor_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : ButtonBottom_Pin ButtonLeft_Pin */
+  GPIO_InitStruct.Pin = ButtonBottom_Pin|ButtonLeft_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ButtonRight_Pin ButtonTop_Pin */
   GPIO_InitStruct.Pin = ButtonRight_Pin|ButtonTop_Pin;
