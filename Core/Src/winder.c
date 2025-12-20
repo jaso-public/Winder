@@ -89,7 +89,7 @@ void initializeButtonState(ButtonState *bs) {
 }
 
 void updateButtonState(ButtonState *bs) {
-    uint64_t now = TIM1->CNT;
+    uint16_t now = TIM1->CNT;
     checkButton(&bs->left, isLeft(), now);
     checkButton(&bs->right, isRight(), now);
     checkButton(&bs->center, isCenter(), now);
@@ -458,8 +458,6 @@ int main_menu(char* date, char* time) {
             "Opto Test",
             "Display Info"
     };
-
-    initializeButtonState(&bs);
 
     int start = 0;
     int current = 0;

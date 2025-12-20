@@ -21,15 +21,15 @@
 // if an event will happen with 100 microseconds then just wait to fire the event.
 #define TOO_CLOSE_TO_EVENT 3600
 
-// button debounce is 50ms or 180000 clock cylces
-#define DEBOUNCE  180000
+// button debounce is 50ms or 180000 clock cycles
+#define DEBOUNCE  60000
 
 #define RED    1
 #define YELLOW 2
 #define GREEN  3
 
 typedef struct {
-    uint64_t time;
+    uint16_t time;
     int count;
     int last;
     uint8_t  pressed;
