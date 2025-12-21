@@ -95,34 +95,35 @@ int32_t readEncoderValue() {
     return __HAL_TIM_GET_COUNTER(&htim2);
 }
 
-// configs (local to main)
-static StepperConfiguration barrelConfig = {
-	.stepperName            = "Barrel",
+static StepperConfiguration carriageConfig = {
+    .stepperName            = "Carriage",
     .timerHandle            = &htim1,
     .compareRegister        = &TIM1->CCR1,
-    .compareFlag            = TIM_FLAG_CC1,
-    .compareInterruptSource = TIM_IT_CC1,
-    .pulsePort              = BarrelPulse_GPIO_Port,
-    .pulsePin               = BarrelPulse_Pin,
-    .directionPort          = BarrelDir_GPIO_Port,
-    .directionPin           = BarrelDir_Pin,
-    .computeIrqNumber       = TIM6_DAC1_IRQn,
-    .pulseWidthTicks        = 360u
-};
-
-static StepperConfiguration carriageConfig = {
-	.stepperName            = "Carriage",
-    .timerHandle            = &htim3,
-    .compareRegister        = &TIM3->CCR1,
     .compareFlag            = TIM_FLAG_CC1,
     .compareInterruptSource = TIM_IT_CC1,
     .pulsePort              = CarriagePulse_GPIO_Port,
     .pulsePin               = CarriagePulse_Pin,
     .directionPort          = CarriageDir_GPIO_Port,
     .directionPin           = CarriageDir_Pin,
+    .computeIrqNumber       = TIM6_DAC1_IRQn,
+    .pulseWidthTicks        = 360u
+};
+
+// configs (local to main)
+static StepperConfiguration barrelConfig = {
+	.stepperName            = "Barrel",
+    .timerHandle            = &htim3,
+    .compareRegister        = &TIM3->CCR1,
+    .compareFlag            = TIM_FLAG_CC1,
+    .compareInterruptSource = TIM_IT_CC1,
+    .pulsePort              = BarrelPulse_GPIO_Port,
+    .pulsePin               = BarrelPulse_Pin,
+    .directionPort          = BarrelDir_GPIO_Port,
+    .directionPin           = BarrelDir_Pin,
     .computeIrqNumber       = TIM7_DAC2_IRQn,
     .pulseWidthTicks        = 360u
 };
+
 
 Stepper barrelStepper, carriageStepper;
 ButtonState bs;
@@ -154,17 +155,20 @@ void steppersInitAll(void)
 }
 
 
-void Timer2_IRQHandler(void) {
-	stepperHandleIrq(&barrelStepper);
-	stepperHandleIrq(&carriageStepper);
-}
-
-void Barrel_IRQHandler(void) {
-	computeNextStepperEvent(&barrelStepper);
+void Carriage_IRQStartPulse(void) {
+    stepperHandleIrq(&carriageStepper);
 }
 
 void Carriage_IRQHandler(void) {
 	computeNextStepperEvent(&carriageStepper);
+}
+
+void Barrel_IRQStartPulse(void) {
+    stepperHandleIrq(&barrelStepper);
+}
+
+void Barrel_IRQHandler(void) {
+    computeNextStepperEvent(&barrelStepper);
 }
 
 // Called by HAL once EXTI3 interrupt is handled
@@ -222,10 +226,16 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  __HAL_RCC_TIM1_CLK_ENABLE();
-  HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_1);
 
   steppersInitAll();
+
+  HAL_TIM_Base_Start(&htim1);
+  HAL_TIM_Base_Start(&htim3);
+  HAL_TIM_Base_Start(&htim6);
+  HAL_TIM_Base_Start(&htim7);
+
+  HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_1);
 
 //  while(1) {
 //      int32_t  val = readEncoderValue();
@@ -233,6 +243,31 @@ int main(void)
 //      printf("value = %ld\r\n", val);
 //      HAL_Delay(500);
 //  }
+
+  // successfully moved the little stepper
+//  while(1) {
+//      HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_RESET);
+//      HAL_Delay(2);
+//      HAL_GPIO_WritePin(BarrelPulse_GPIO_Port, BarrelPulse_Pin, GPIO_PIN_SET);
+//      HAL_Delay(2);
+//  }
+
+  moveToPosition(&barrelStepper, 10000, 5000);
+
+  while(barrelStepper.currentPosition != barrelStepper.desiredPosition) {
+      printStepperInfo(&barrelStepper);
+      HAL_Delay(500);
+  }
+
+  moveToPosition(&barrelStepper, 1000, 2000);
+
+  while(barrelStepper.currentPosition != barrelStepper.desiredPosition) {
+      printStepperInfo(&barrelStepper);
+      HAL_Delay(500);
+  }
+
+  printf("---------------------\r\n");
+  printStepperInfo(&barrelStepper);
 
 	// get the date as mm/dd/yy
 	char date[9];

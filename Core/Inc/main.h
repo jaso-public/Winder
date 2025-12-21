@@ -98,9 +98,10 @@ void Error_Handler(void);
 
 int32_t readEncoderValue();
 
-void Timer2_IRQHandler(void);
-void Barrel_IRQHandler(void);
+void Carriage_IRQStartPulse(void);
 void Carriage_IRQHandler(void);
+void Barrel_IRQHandler(void);
+void Barrel_IRQStartPulse(void);
 
 /* USER CODE END Private defines */
 

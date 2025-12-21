@@ -58,7 +58,7 @@ typedef struct {
 
 	IRQn_Type computeIrqNumber;
 
-	uint32_t pulseWidthTicks;             // e.g., 72 ticks (~2 µs @36 MHz)
+	uint32_t pulseWidthTicks;             // e.g., 36 ticks (~2 µs @36 MHz)
 } StepperConfiguration;
 
 
@@ -66,7 +66,7 @@ typedef struct {
 typedef struct {
 	StepperConfiguration *config;
 
-    uint32_t lastPulseTick;               // last scheduled rising tick (TIM2 domain)
+    uint32_t lastPulseTick;               // last scheduled rising tick
 
     volatile float currentSpeed;          // steps/s
     volatile float speedSquared;
@@ -87,5 +87,6 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction);
 
 void computeNextStepperEvent(Stepper *s);
 void stepperHandleIrq(Stepper *s);
+void printStepperInfo(Stepper *s);
 
 #endif // STEPPER_H

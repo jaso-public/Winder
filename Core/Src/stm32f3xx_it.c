@@ -222,6 +222,9 @@ void TIM1_CC_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_CC_IRQn 0 */
 
+    Carriage_IRQStartPulse();
+    return;
+
   /* USER CODE END TIM1_CC_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_CC_IRQn 1 */
@@ -236,6 +239,9 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
+    Barrel_IRQStartPulse();
+    return;
+
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
@@ -249,8 +255,10 @@ void TIM3_IRQHandler(void)
 void TIM6_DAC1_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM6_DAC1_IRQn 0 */
-	Barrel_IRQHandler();
+
+	Carriage_IRQHandler();
 	return;
+
   /* USER CODE END TIM6_DAC1_IRQn 0 */
   HAL_TIM_IRQHandler(&htim6);
   /* USER CODE BEGIN TIM6_DAC1_IRQn 1 */
@@ -264,8 +272,10 @@ void TIM6_DAC1_IRQHandler(void)
 void TIM7_DAC2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM7_DAC2_IRQn 0 */
-	Carriage_IRQHandler();
+
+	Barrel_IRQHandler();
 	return;
+
   /* USER CODE END TIM7_DAC2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim7);
   /* USER CODE BEGIN TIM7_DAC2_IRQn 1 */

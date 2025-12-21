@@ -137,7 +137,7 @@ void computeNextStepperEvent(Stepper *s) {
         }
     }
 
-    if (s->currentSpeed == 0.0) {
+    if (s->mode == VELOCITY && s->currentSpeed == 0.0) {
         s->speedSquared = 0.0f;
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
         s->mode = STOPPED;
@@ -157,9 +157,14 @@ void stepperHandleIrq(Stepper *s) {
     __HAL_TIM_CLEAR_IT(htim, cfg->compareInterruptSource);
 
     if (cfg->pulsePort->ODR & cfg->pulsePin) {
-        // FALL: drive low an schedule a low priority interrupt to compute next pulse
+        // FALL: drive low and schedule a low priority interrupt to compute next pulse
         HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_RESET);
         s->currentPosition += s->stepIncrement;
+        if(s->mode == POSITION && s->currentPosition == s->desiredPosition) {
+            __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
+            s->mode = STOPPED;
+            return;
+        }
         NVIC_SetPendingIRQ(cfg->computeIrqNumber);
     } else {
         // RISE: drive high and schedule the FALL compare
@@ -168,3 +173,20 @@ void stepperHandleIrq(Stepper *s) {
     }
 }
 
+void printStepperInfo(Stepper *s) {
+
+    StepperConfiguration *cfg = s->config;
+    printf("%s:\r\n", cfg->stepperName);
+
+    printf("   lastPulseTick  : %lu\r\n", s->lastPulseTick);
+    printf("   currentSpeed   : %f\r\n", s->currentSpeed);
+    printf("   speedSquared   : %f\r\n", s->speedSquared);
+    printf("   desiredSpeed   : %f\r\n", s->desiredSpeed);
+    printf("   acceleration2x : %f\r\n", s->acceleration2x);
+
+    printf("   mode           : %d\r\n", s->mode);
+    printf("   currentPosition: %ld\r\n", s->currentPosition);
+    printf("   desiredPosition: %ld\r\n", s->desiredPosition);
+    printf("   stepIncrement  : %ld\r\n", s->stepIncrement);
+
+}
