@@ -237,6 +237,8 @@ int main(void)
   HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_1);
 
+  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+
 //  while(1) {
 //      int32_t  val = readEncoderValue();
 //      val = __HAL_TIM_GET_COUNTER(&htim1);
@@ -252,22 +254,22 @@ int main(void)
 //      HAL_Delay(2);
 //  }
 
-  moveToPosition(&barrelStepper, 10000, 5000);
-
-  while(barrelStepper.currentPosition != barrelStepper.desiredPosition) {
-      printStepperInfo(&barrelStepper);
-      HAL_Delay(500);
-  }
-
-  moveToPosition(&barrelStepper, 1000, 2000);
-
-  while(barrelStepper.currentPosition != barrelStepper.desiredPosition) {
-      printStepperInfo(&barrelStepper);
-      HAL_Delay(500);
-  }
-
-  printf("---------------------\r\n");
-  printStepperInfo(&barrelStepper);
+//  moveToPosition(&carriageStepper, 10000, 5000);
+//
+//  while(carriageStepper.currentPosition != carriageStepper.desiredPosition) {
+//      printStepperInfo(&carriageStepper);
+//      HAL_Delay(500);
+//  }
+//
+//  moveToPosition(&carriageStepper, 1000, 2000);
+//
+//  while(carriageStepper.currentPosition != carriageStepper.desiredPosition) {
+//      printStepperInfo(&carriageStepper);
+//      HAL_Delay(500);
+//  }
+//
+//  printf("---------------------\r\n");
+//  printStepperInfo(&barrelStepper);
 
 	// get the date as mm/dd/yy
 	char date[9];
