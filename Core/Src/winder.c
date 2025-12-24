@@ -324,7 +324,7 @@ void homeCarriage() {
     lcd_clear();
     lcd_write_string("Home the carriage");
 
-    if(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {
+    if(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == GPIO_PIN_RESET ) {
         lcd_set_cursor(0, 1);
         lcd_write_string("Moving to the right");
 
@@ -339,7 +339,7 @@ void homeCarriage() {
     lcd_write_string("High speed to sensor");
 
     // move right until the optical sensor trips
-    waitForOptical(5000);
+    waitForOptical(15000);
 
 
     lcd_clear();
