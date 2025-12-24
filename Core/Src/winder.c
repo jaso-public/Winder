@@ -27,6 +27,9 @@ extern Stepper barrelStepper;
 extern Stepper carriageStepper;
 
 
+#define STEPS_PER_INCH 25000
+#define STEP_PER_REVOLUTION 10880
+
 #define DEBOUNCE_DELAY 20
 
 extern ButtonState bs;
@@ -394,7 +397,7 @@ void calibrateCarriage() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = 25000 * 24;
+    uint32_t distance = STEPS_PER_INCH * 24;
 
     moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + distance);
 
@@ -427,7 +430,7 @@ void calibrateBarrel() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = 21760 * 10;
+    uint32_t distance = STEP_PER_REVOLUTION * 10;
 
     moveToPosition(&barrelStepper, 16000, barrelStepper.currentPosition + distance);
 
