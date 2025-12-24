@@ -384,7 +384,7 @@ void optoTest() {
     }
 }
 
-void calibateCarriage() {
+void calibrateCarriage() {
 
     char buffer[20];
 
@@ -415,6 +415,40 @@ void calibateCarriage() {
         if(newPress(&bs.center)) break;
     }
 }
+
+
+void calibrateBarrel() {
+
+    char buffer[20];
+
+    lcd_clear();
+    lcd_set_cursor(0, 0);
+    snprintf(buffer, sizeof(buffer), "Start: %ld", barrelStepper.currentPosition);
+    lcd_write_string(buffer);
+
+
+    uint32_t distance = 21760 * 10;
+
+    moveToPosition(&carriageStepper, 16000, barrelStepper.currentPosition + distance);
+
+    uint32_t pos = 0;
+    do {
+        pos = barrelStepper.currentPosition;
+        lcd_set_cursor(0, 1);
+        snprintf(buffer, sizeof(buffer), "Position: %ld", pos);
+        lcd_write_string(buffer);
+        HAL_Delay(200);
+    } while(barrelStepper.desiredPosition != pos);
+
+    lcd_set_cursor(0, 3);
+    lcd_write_string("'C' to exit");
+
+    while(1) {
+        updateButtonState(&bs);
+        if(newPress(&bs.center)) break;
+    }
+}
+
 
 
 void display_menu(char* prompt, char** options, int count, int current, int start) {
@@ -485,6 +519,7 @@ int main_menu(char* date, char* time) {
             "Move Barrel",
             "Read Encoder",
             "Calibrate Carriage",
+            "Calibrate Barrel",
             "Barrel Profile 1",
             "Barrel Profile 2",
             "Test Lights",
@@ -529,7 +564,8 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 
-            if(strcmp(selections[current], "Calibrate Carriage") == 0) calibateCarriage();
+            if(strcmp(selections[current], "Calibrate Carriage") == 0) calibrateCarriage();
+            if(strcmp(selections[current], "Calibrate Barrel") == 0) calibrateBarrel();
 
 
             if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();
