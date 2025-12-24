@@ -762,14 +762,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : OpticalSensor_Pin */
-  GPIO_InitStruct.Pin = OpticalSensor_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(OpticalSensor_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : ButtonBottom_Pin ButtonLeft_Pin */
-  GPIO_InitStruct.Pin = ButtonBottom_Pin|ButtonLeft_Pin;
+  /*Configure GPIO pins : OpticalSensor_Pin ButtonBottom_Pin ButtonLeft_Pin */
+  GPIO_InitStruct.Pin = OpticalSensor_Pin|ButtonBottom_Pin|ButtonLeft_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
