@@ -394,7 +394,7 @@ void calibateCarriage() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = 25600 * 20;
+    uint32_t distance = 25000 * 24;
 
     moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + distance);
 
