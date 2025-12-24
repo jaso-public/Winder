@@ -385,20 +385,24 @@ void calibateCarriage() {
 
     char buffer[20];
 
-    carriageStepper.desiredPosition = carriageStepper.currentPosition + 32000;
-    carriageStepper.desiredSpeed = 16000;
-
-    moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + 32000);
-
     lcd_clear();
+    lcd_set_cursor(0, 0);
+    snprintf(buffer, sizeof(buffer), "Start: %ld", carriageStepper.currentPosition);
+    lcd_write_string(buffer);
+
+
+    uint32_t distance = 32000 * 20;
+
+    moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + distance);
+
     do {
-        lcd_set_cursor(0, 0);
+        lcd_set_cursor(0, 1);
         snprintf(buffer, sizeof(buffer), "Position: %ld", carriageStepper.currentPosition);
         lcd_write_string(buffer);
         HAL_Delay(200);
     } while(carriageStepper.desiredPosition != carriageStepper.currentPosition);
 
-    lcd_set_cursor(0, 2);
+    lcd_set_cursor(0, 3);
     lcd_write_string("'C' to exit");
 
     while(1) {
