@@ -429,7 +429,7 @@ void calibrateBarrel() {
 
     uint32_t distance = 21760 * 10;
 
-    moveToPosition(&carriageStepper, 16000, barrelStepper.currentPosition + distance);
+    moveToPosition(&barrelStepper, 16000, barrelStepper.currentPosition + distance);
 
     uint32_t pos = 0;
     do {
