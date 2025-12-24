@@ -381,6 +381,33 @@ void optoTest() {
     }
 }
 
+void calibateCarriage() {
+
+    char buffer[20];
+
+    carriageStepper.desiredPosition = carriageStepper.currentPosition + 32000;
+    carriageStepper.desiredSpeed = 16000;
+
+    moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + 32000);
+
+    lcd_clear();
+    do {
+        lcd_set_cursor(0, 0);
+        snprintf(buffer, sizeof(buffer), "Position: %ld", carriageStepper.currentPosition);
+        lcd_write_string(buffer);
+        HAL_Delay(200);
+    } while(carriageStepper.desiredPosition != carriageStepper.currentPosition);
+
+    lcd_set_cursor(0, 2);
+    lcd_write_string("'C' to exit");
+
+    while(1) {
+        updateButtonState(&bs);
+        if(newPress(&bs.center)) break;
+    }
+}
+
+
 void display_menu(char* prompt, char** options, int count, int current, int start) {
 
     setLight(YELLOW);
@@ -491,6 +518,9 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
+
+            if(strcmp(selections[current], "Calibrate Carriage") == 0) calibateCarriage();
+
 
             if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();
 
