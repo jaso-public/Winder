@@ -475,6 +475,7 @@ int main_menu(char* date, char* time) {
             "Move Carriage",
             "Move Barrel",
             "Read Encoder",
+            "Calibrate Carriage",
             "Barrel Profile 1",
             "Barrel Profile 2",
             "Test Lights",
