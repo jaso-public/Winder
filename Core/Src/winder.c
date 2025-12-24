@@ -323,12 +323,15 @@ void waitForOptical(int speed) {
 void homeCarriage() {
     lcd_clear();
     lcd_write_string("Home the carriage");
-    lcd_set_cursor(0, 1);
-    lcd_write_string("Moving to the right");
 
-    // move left to start, no matter what
-    carriageStepper.currentPosition = 0;
-    moveToPositionAndWait(5000, 20000);
+    if(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {
+        lcd_set_cursor(0, 1);
+        lcd_write_string("Moving to the right");
+
+        // move left to start, no matter what
+        carriageStepper.currentPosition = 0;
+        moveToPositionAndWait(5000, 20000);
+    }
 
     lcd_clear();
     lcd_write_string("Home the carriage");
@@ -391,16 +394,16 @@ void calibateCarriage() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = 32000 * 20;
+    uint32_t distance = 25600 * 20;
 
     moveToPosition(&carriageStepper, 16000, carriageStepper.currentPosition + distance);
 
-    do {
+    while(carriageStepper.desiredPosition != carriageStepper.currentPosition) {
         lcd_set_cursor(0, 1);
         snprintf(buffer, sizeof(buffer), "Position: %ld", carriageStepper.currentPosition);
         lcd_write_string(buffer);
         HAL_Delay(200);
-    } while(carriageStepper.desiredPosition != carriageStepper.currentPosition);
+    }
 
     lcd_set_cursor(0, 3);
     lcd_write_string("'C' to exit");
