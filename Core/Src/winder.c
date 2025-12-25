@@ -28,7 +28,7 @@ extern Stepper carriageStepper;
 
 
 #define STEPS_PER_INCH 25000
-#define STEP_PER_REVOLUTION 10880
+#define STEPS_PER_REVOLUTION 10880
 
 #define DEBOUNCE_DELAY 20
 
@@ -430,7 +430,7 @@ void calibrateBarrel() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = STEP_PER_REVOLUTION * 10;
+    uint32_t distance = STEPS_PER_REVOLUTION * 10;
 
     moveToPosition(&barrelStepper, 16000, barrelStepper.currentPosition + distance);
 
@@ -450,6 +450,50 @@ void calibrateBarrel() {
         updateButtonState(&bs);
         if(newPress(&bs.center)) break;
     }
+}
+
+void doBoth() {
+    char buffer[20];
+
+    lcd_clear();
+    lcd_set_cursor(0, 0);
+    snprintf(buffer, sizeof(buffer), "Start: %ld", carriageStepper.currentPosition);
+    lcd_write_string(buffer);
+
+
+    uint32_t distance = STEPS_PER_INCH * 16;
+
+    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, carriageStepper.currentPosition + distance);
+    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/2, CCW);
+
+
+    uint32_t pos = 0;
+    do {
+        pos = barrelStepper.currentPosition;
+        lcd_set_cursor(0, 2);
+        snprintf(buffer, sizeof(buffer), "Barrel:   %ld   ", pos);
+        lcd_write_string(buffer);
+
+        pos = carriageStepper.currentPosition;
+        lcd_set_cursor(0, 1);
+        snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", pos);
+        lcd_write_string(buffer);
+        HAL_Delay(200);
+    } while(carriageStepper.desiredPosition != pos);
+
+    stepperStart(&barrelStepper, 0, CCW);
+
+    lcd_set_cursor(0, 3);
+    lcd_write_string("'C' to exit");
+
+    while(1) {
+        updateButtonState(&bs);
+        if(newPress(&bs.center)) break;
+    }
+
+
+
+
 }
 
 
@@ -569,6 +613,8 @@ int main_menu(char* date, char* time) {
 
             if(strcmp(selections[current], "Calibrate Carriage") == 0) calibrateCarriage();
             if(strcmp(selections[current], "Calibrate Barrel") == 0) calibrateBarrel();
+
+            if(strcmp(selections[current], "Barrel Profile 1") == 0) doBoth();
 
 
             if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();
