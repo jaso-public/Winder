@@ -464,7 +464,7 @@ void doBoth() {
     uint32_t distance = STEPS_PER_INCH * 16;
 
     moveToPosition(&carriageStepper, STEPS_PER_INCH/2, carriageStepper.currentPosition + distance);
-    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/2, CCW);
+    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/4, CW);
 
 
     uint32_t pos = 0;
@@ -481,7 +481,7 @@ void doBoth() {
         HAL_Delay(200);
     } while(carriageStepper.desiredPosition != pos);
 
-    stepperStart(&barrelStepper, 0, CCW);
+    stopAndWait(&barrelStepper);
 
     lcd_set_cursor(0, 3);
     lcd_write_string("'C' to exit");
