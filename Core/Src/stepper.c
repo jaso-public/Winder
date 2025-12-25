@@ -101,6 +101,11 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction) {
     __HAL_TIM_ENABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
 }
 
+void stopAndWait(Stepper *s) {
+    s->desiredSpeed = 0;
+    while(s->mode != STOPPED);
+}
+
 
 void computeNextStepperEvent(Stepper *s) {
 

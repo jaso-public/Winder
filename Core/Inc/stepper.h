@@ -84,6 +84,7 @@ typedef struct {
 void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration);
 void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition);
 void stepperStart(Stepper *s, float desiredSpeed, int direction);
+void stopAndWait(Stepper *s);
 
 void computeNextStepperEvent(Stepper *s);
 void stepperHandleIrq(Stepper *s);
