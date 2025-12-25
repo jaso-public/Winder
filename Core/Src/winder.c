@@ -495,7 +495,7 @@ void doBoth() {
         snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", c);
         lcd_write_string(buffer);
 
-        printf("%ld(%ld) %ld(%ld) %ld%ld)\r\n", c,(c-co), b, (b-bo), e, (e-eo));
+        printf("%ld(%ld) %ld(%ld) %ld(%ld)\r\n", c,(c-co), b, (b-bo), e, (e-eo));
         co=c; bo=b; eo = e;
 
     } while(carriageStepper.desiredPosition != c);
