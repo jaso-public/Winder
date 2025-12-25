@@ -470,29 +470,35 @@ void doBoth() {
     int32_t step = STEPS_PER_INCH/4;
     int32_t next = carriageStepper.currentPosition + step;
 
-    uint32_t pos = 0;
+    int32_t c=0, b=0, e=0;
+    int32_t co=0, bo=0, eo=0;
+
     do {
-        while(barrelStepper.currentPosition < next) ;
+        do {
+            c = carriageStepper.currentPosition;
+        } while( c<next);
+
         next += step;
-        int32_t encoder = readEncoderValue();
+
+        b = barrelStepper.currentPosition;
+        e = readEncoderValue();
 
         lcd_set_cursor(0, 0);
-        snprintf(buffer, sizeof(buffer), "Encoder:  %ld   ", encoder);
+        snprintf(buffer, sizeof(buffer), "Encoder:  %ld   ", e);
         lcd_write_string(buffer);
 
-        pos = barrelStepper.currentPosition;
         lcd_set_cursor(0, 2);
-        snprintf(buffer, sizeof(buffer), "Barrel:   %ld   ", pos);
+        snprintf(buffer, sizeof(buffer), "Barrel:   %ld   ", b);
         lcd_write_string(buffer);
 
-        pos = carriageStepper.currentPosition;
         lcd_set_cursor(0, 1);
-        snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", pos);
+        snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", c);
         lcd_write_string(buffer);
 
-        printf("%ld %ld\r\n", pos, encoder);
+        printf("%ld(%ld) %ld(%ld) %ld%ld)\r\n", c,(c-co), b, (b-bo), e, (e-eo));
+        co=c; bo=b; eo = e;
 
-    } while(carriageStepper.desiredPosition != pos);
+    } while(carriageStepper.desiredPosition != c);
 
     stopAndWait(&barrelStepper);
 
