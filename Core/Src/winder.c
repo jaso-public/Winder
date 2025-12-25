@@ -461,14 +461,25 @@ void doBoth() {
     lcd_write_string(buffer);
 
 
-    uint32_t distance = STEPS_PER_INCH * 16;
+    uint32_t distance = STEPS_PER_INCH * 17.5;
 
     moveToPosition(&carriageStepper, STEPS_PER_INCH/2, carriageStepper.currentPosition + distance);
     stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/4, CW);
 
 
+    int32_t step = STEPS_PER_INCH/4;
+    int32_t next = carriageStepper.currentPosition + step;
+
     uint32_t pos = 0;
     do {
+        while(barrelStepper.currentPosition < next) ;
+        next += step;
+        int32_t encoder = readEncoderValue();
+
+        lcd_set_cursor(0, 0);
+        snprintf(buffer, sizeof(buffer), "Encoder:  %ld   ", encoder);
+        lcd_write_string(buffer);
+
         pos = barrelStepper.currentPosition;
         lcd_set_cursor(0, 2);
         snprintf(buffer, sizeof(buffer), "Barrel:   %ld   ", pos);
@@ -478,7 +489,9 @@ void doBoth() {
         lcd_set_cursor(0, 1);
         snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", pos);
         lcd_write_string(buffer);
-        HAL_Delay(200);
+
+        printf("%ld %ld\r\n", pos, encoder);
+
     } while(carriageStepper.desiredPosition != pos);
 
     stopAndWait(&barrelStepper);
