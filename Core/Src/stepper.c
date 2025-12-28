@@ -102,6 +102,10 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction) {
 }
 
 void stopAndWait(Stepper *s) {
+    if(s->mode == POSITION) {
+        s->desiredPosition = s->currentPosition;
+    }
+
     s->desiredSpeed = 0;
     while(s->mode != STOPPED);
 }

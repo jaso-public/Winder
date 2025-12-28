@@ -511,7 +511,7 @@ void doBoth() {
         float dia = diameter((b-bo), yDis((e-eo), (c-co)));
 
         lcd_set_cursor(0, 3);
-        snprintf(buffer, sizeof(buffer), "Diameter: %f   ", dia);
+        snprintf(buffer, sizeof(buffer), "Diameter: %.3f   ", dia);
         lcd_write_string(buffer);
 
 
@@ -525,8 +525,10 @@ void doBoth() {
     } while(carriageStepper.desiredPosition != c);
 
     stopAndWait(&barrelStepper);
-    printf("told the barrel to stop\r\n");
+    stopAndWait(&carriageStepper);
+    printf("told the steppers to stop\r\n");
     printStepperInfo(&barrelStepper);
+    printStepperInfo(&carriageStepper);
 
     // wait to return to main menu
     lcd_set_cursor(0, 3);
