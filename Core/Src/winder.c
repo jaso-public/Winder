@@ -44,7 +44,7 @@ float yDis(float eCnt, float xCnt) {
 }
 
 float diameter(float yCnt, float yDis) {
-    return yDis * STEPS_PER_REVOLUTION / yCnt;
+    return yDis * STEPS_PER_REVOLUTION / yCnt / 3.14159268;
 }
 
 int isLeft() {
@@ -279,7 +279,7 @@ void moveStepper(Stepper* s) {
 
         if(newPress(&bs.left) && !running) {
             running = 1;
-            stepperStart(s, 1000, CW);
+            stepperStart(s, 10000, CW);
             printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             left = 1;
             showDisplay(s, left);
@@ -288,7 +288,7 @@ void moveStepper(Stepper* s) {
 
         if(newPress(&bs.right) && !running) {
             running = 1;
-            stepperStart(s, 1000, CCW);
+            stepperStart(s, 10000, CCW);
             printf("right %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             left = 0;
             showDisplay(s, left);
@@ -352,7 +352,7 @@ void homeCarriage() {
     lcd_clear();
     lcd_write_string("Home the carriage");
     lcd_set_cursor(0, 1);
-    lcd_write_string("High speed to sensor");
+    lcd_write_string("High spd to sensor");
 
     // move right until the optical sensor trips
     waitForOptical(15000);
@@ -369,7 +369,7 @@ void homeCarriage() {
     lcd_clear();
     lcd_write_string("Home the carriage");
     lcd_set_cursor(0, 1);
-    lcd_write_string("Slow speed to sensor");
+    lcd_write_string("Slow spd to sensor");
 
     waitForOptical(250);
 }
