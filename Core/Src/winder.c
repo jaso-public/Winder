@@ -509,13 +509,26 @@ void doBoth() {
         lcd_write_string(buffer);
 
         float dia = diameter((b-bo), yDis((e-eo), (c-co)));
+
+        lcd_set_cursor(0, 3);
+        snprintf(buffer, sizeof(buffer), "Diameter: %f   ", dia);
+        lcd_write_string(buffer);
+
+
         printf("%ld(%ld) %ld(%ld) %ld(%ld)  dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), dia);
         co=c; bo=b; eo = e;
+
+        // break out of the loop to stop early
+         updateButtonState(&bs);
+         if(newPress(&bs.center)) break;
 
     } while(carriageStepper.desiredPosition != c);
 
     stopAndWait(&barrelStepper);
+    printf("told the barrel to stop\r\n");
+    printStepperInfo(&barrelStepper);
 
+    // wait to return to main menu
     lcd_set_cursor(0, 3);
     lcd_write_string("'C' to exit");
 
