@@ -489,6 +489,7 @@ void doBoth() {
     do {
         do {
             c = carriageStepper.currentPosition;
+            if(isCenter()) break;
         } while( c<next);
 
         next += step;
@@ -519,8 +520,7 @@ void doBoth() {
         co=c; bo=b; eo = e;
 
         // break out of the loop to stop early
-         updateButtonState(&bs);
-         if(newPress(&bs.center)) break;
+        if(isCenter()) break;
 
     } while(carriageStepper.desiredPosition != c);
 
