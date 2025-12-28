@@ -516,7 +516,7 @@ void doBoth() {
         lcd_write_string(buffer);
 
 
-        printf("%ld(%ld) %ld(%ld) %ld(%ld)  dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), dia);
+        printf("%ld(%ld) %ld(%ld) %ld(%ld) dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), dia);
         co=c; bo=b; eo = e;
 
         // break out of the loop to stop early
