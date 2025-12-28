@@ -20,7 +20,7 @@
 #include <sys/_stdint.h>
 
 #include "stepper.h"
-#include <winder.h>
+#include "winder.h"
 #include "gitversion.h"
 
 extern Stepper barrelStepper;
@@ -29,10 +29,23 @@ extern Stepper carriageStepper;
 
 #define STEPS_PER_INCH 25000
 #define STEPS_PER_REVOLUTION 10880
+#define COUNT_PER_INCH 610
 
 #define DEBOUNCE_DELAY 20
 
 extern ButtonState bs;
+
+
+
+float yDis(float eCnt, float xCnt) {
+    float h = eCnt / COUNT_PER_INCH;
+    float a = xCnt / STEPS_PER_INCH;
+    return sqrt(h*h - a*a);
+}
+
+float diameter(float yCnt, float yDis) {
+    return yDis * STEPS_PER_REVOLUTION / yCnt;
+}
 
 int isLeft() {
 	return HAL_GPIO_ReadPin(ButtonLeft_GPIO_Port, ButtonLeft_Pin) == 0;
@@ -495,7 +508,8 @@ void doBoth() {
         snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", c);
         lcd_write_string(buffer);
 
-        printf("%ld(%ld) %ld(%ld) %ld(%ld)\r\n", c,(c-co), b, (b-bo), e, (e-eo));
+        float dia = diameter((b-bo), yDis((e-eo), (c-co)));
+        printf("%ld(%ld) %ld(%ld) %ld(%ld)  dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), dia);
         co=c; bo=b; eo = e;
 
     } while(carriageStepper.desiredPosition != c);
