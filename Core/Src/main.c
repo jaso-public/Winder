@@ -109,7 +109,6 @@ static StepperConfiguration carriageConfig = {
     .pulseWidthTicks        = 360u
 };
 
-// configs (local to main)
 static StepperConfiguration barrelConfig = {
 	.stepperName            = "Barrel",
     .timerHandle            = &htim3,

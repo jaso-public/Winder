@@ -7,7 +7,7 @@
 
 
 #include <stdio.h>
-
+#include <string.h>
 #include "stepper.h"
 
 
@@ -23,6 +23,7 @@ void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration)
     s->acceleration2x              = acceleration * 2.0f;
     s->lastPulseTick               = 0;
     s->mode                        = STOPPED;
+    s->stopping                    = 0;
 
 
     HAL_GPIO_WritePin(s->config->pulsePort, s->config->pulsePin, GPIO_PIN_RESET);
@@ -40,8 +41,14 @@ void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration)
 
 void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition) {
 
-    StepperConfiguration *cfg = s->config;
+    // check to see if the stepper is stopped
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
     if(s->mode != STOPPED) halt("BUG: moveToPosition() state not STOPPED");
+    __set_PRIMASK(primask_bit);
+
+
+    StepperConfiguration *cfg = s->config;
 
     printf("moveToPosition desiredPosition:%ld currentPosition:%ld\r\n", desiredPosition, s->currentPosition);
 
@@ -51,6 +58,7 @@ void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition) {
     }
 
 	s->mode = POSITION;
+	s->stopping = 0;
 
     s->desiredSpeed = initialSpeed;
     s->desiredPosition = desiredPosition;
@@ -74,11 +82,16 @@ void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition) {
 
 void stepperStart(Stepper *s, float desiredSpeed, int direction) {
 
-    StepperConfiguration *cfg = s->config;
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
     if(s->mode != STOPPED) halt("BUG: stepperStart() state not STOPPED");
+    __set_PRIMASK(primask_bit);
 
+
+    StepperConfiguration *cfg = s->config;
 
     s->mode = VELOCITY;
+    s->stopping = 0;
 
     s->desiredSpeed = desiredSpeed;
 
@@ -101,13 +114,51 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction) {
     __HAL_TIM_ENABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
 }
 
-void stopAndWait(Stepper *s) {
-    if(s->mode == POSITION) {
-        s->desiredPosition = s->currentPosition;
-    }
 
-    s->desiredSpeed = 0;
-    while(s->mode != STOPPED);
+void waitUntilStopped(Stepper *s) {
+    while(1) {
+        uint32_t primask_bit = __get_PRIMASK();
+        __disable_irq();
+        int m = s->mode;
+        __set_PRIMASK(primask_bit);
+        if(m == STOPPED) return;
+    }
+}
+
+void stop(Stepper *s) {
+    // no need to disable interrupts, the stopping is volatile
+    s->stopping = 1;
+}
+
+void changeSpeed(Stepper *s, float newSpeed) {
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
+    s->desiredSpeed = newSpeed;
+    __set_PRIMASK(primask_bit);
+}
+
+
+void printStepperInfo(Stepper *stepper) {
+    Stepper s;
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
+    memcpy(&s, stepper, sizeof(Stepper));
+    __set_PRIMASK(primask_bit);
+
+    StepperConfiguration *cfg = s.config;
+    printf("%s:\r\n", cfg->stepperName);
+
+    printf("   lastPulseTick  : %lu\r\n", s.lastPulseTick);
+    printf("   currentSpeed   : %f\r\n", s.currentSpeed);
+    printf("   speedSquared   : %f\r\n", s.speedSquared);
+    printf("   desiredSpeed   : %f\r\n", s.desiredSpeed);
+    printf("   acceleration2x : %f\r\n", s.acceleration2x);
+
+    printf("   mode           : %d\r\n", s.mode);
+    printf("   stopping       : %d\r\n", s.stopping);
+    printf("   currentPosition: %ld\r\n", s.currentPosition);
+    printf("   desiredPosition: %ld\r\n", s.desiredPosition);
+    printf("   stepIncrement  : %ld\r\n", s.stepIncrement);
 }
 
 
@@ -120,9 +171,15 @@ void computeNextStepperEvent(Stepper *s) {
         uint32_t stepsToStop = (uint32_t) ceilf(s->speedSquared / s->acceleration2x);
         int32_t stepsRemaining = s->desiredPosition - s->currentPosition;
         if(stepsRemaining < 0) stepsRemaining = -stepsRemaining;
+
+        if(s->stopping) stepsRemaining = stepsToStop;
         if (stepsRemaining <= stepsToStop) {
             s->desiredSpeed = 0.0f;
         }
+    }
+
+    if (s->mode == VELOCITY && s->stopping) {
+        s->desiredSpeed = 0.0f;
     }
 
     if (s->currentSpeed < s->desiredSpeed) {
@@ -146,7 +203,7 @@ void computeNextStepperEvent(Stepper *s) {
         }
     }
 
-    if (s->mode == VELOCITY && s->currentSpeed == 0.0) {
+    if (s->currentSpeed == 0.0) {
         s->speedSquared = 0.0f;
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
         s->mode = STOPPED;
@@ -182,20 +239,3 @@ void stepperHandleIrq(Stepper *s) {
     }
 }
 
-void printStepperInfo(Stepper *s) {
-
-    StepperConfiguration *cfg = s->config;
-    printf("%s:\r\n", cfg->stepperName);
-
-    printf("   lastPulseTick  : %lu\r\n", s->lastPulseTick);
-    printf("   currentSpeed   : %f\r\n", s->currentSpeed);
-    printf("   speedSquared   : %f\r\n", s->speedSquared);
-    printf("   desiredSpeed   : %f\r\n", s->desiredSpeed);
-    printf("   acceleration2x : %f\r\n", s->acceleration2x);
-
-    printf("   mode           : %d\r\n", s->mode);
-    printf("   currentPosition: %ld\r\n", s->currentPosition);
-    printf("   desiredPosition: %ld\r\n", s->desiredPosition);
-    printf("   stepIncrement  : %ld\r\n", s->stepIncrement);
-
-}

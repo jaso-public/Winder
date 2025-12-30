@@ -283,7 +283,6 @@ void moveStepper(Stepper* s) {
             printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             left = 1;
             showDisplay(s, left);
-
         }
 
         if(newPress(&bs.right) && !running) {
@@ -295,33 +294,33 @@ void moveStepper(Stepper* s) {
         }
 
         if(newPress(&bs.center)) {
-            s->desiredSpeed = 0.0f;
+            stop(s);
             printf("center %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             showDisplay(s, left);
         }
 
         if(newPress(&bs.top)) {
-             s->desiredSpeed *= 1.1;
+             changeSpeed(s, s->desiredSpeed * 1.1);
              printf("top %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
              showDisplay(s, left);
         }
 
         if(newPress(&bs.bottom)) {
-            s->desiredSpeed /= 1.1;
+            changeSpeed(s, s->desiredSpeed / 1.1);
             printf("bottom %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
             showDisplay(s, left);
         }
 	}
 
-    s->desiredSpeed = 0.0f;
-    while( s->currentSpeed > 0.0f ) {}
+    stop(s);
+    waitUntilStopped(s);
 
 }
 
 
 void moveToPositionAndWait(int speed, int position) {
     moveToPosition(&carriageStepper, speed, position);
-    while(carriageStepper.mode != STOPPED) {}
+    waitUntilStopped(&carriageStepper);
 }
 
 void waitForOptical(int speed) {
@@ -330,8 +329,8 @@ void waitForOptical(int speed) {
     while(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin)) {}
     long oldValue = carriageStepper.currentPosition;
     carriageStepper.currentPosition = 0;
-    carriageStepper.desiredSpeed = 0;
-    while(carriageStepper.mode != STOPPED) {}
+    stop(&carriageStepper);
+    waitUntilStopped(&carriageStepper);
     printf("oldValue: %ld   finalPosition: %ld\n", oldValue, carriageStepper.currentPosition);
     moveToPositionAndWait(100, 0);
 }
@@ -342,9 +341,10 @@ void homeCarriage() {
 
     if(HAL_GPIO_ReadPin(OpticalSensor_GPIO_Port, OpticalSensor_Pin) == GPIO_PIN_RESET ) {
         lcd_set_cursor(0, 1);
+        lcd_write_string("Optosensor engaged");
+        lcd_set_cursor(0, 2);
         lcd_write_string("Moving to the right");
 
-        // move left to start, no matter what
         carriageStepper.currentPosition = 0;
         moveToPositionAndWait(5000, 20000);
     }
@@ -524,9 +524,12 @@ void doBoth() {
 
     } while(carriageStepper.desiredPosition != c);
 
-    stopAndWait(&barrelStepper);
-    stopAndWait(&carriageStepper);
+    stop(&barrelStepper);
+    stop(&carriageStepper);
     printf("told the steppers to stop\r\n");
+    waitUntilStopped(&barrelStepper);
+    waitUntilStopped(&carriageStepper);
+
     printStepperInfo(&barrelStepper);
     printStepperInfo(&carriageStepper);
 

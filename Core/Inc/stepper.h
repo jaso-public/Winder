@@ -66,17 +66,18 @@ typedef struct {
 typedef struct {
 	StepperConfiguration *config;
 
-    uint32_t lastPulseTick;               // last scheduled rising tick
+	volatile uint32_t lastPulseTick;               // last scheduled rising tick
+    float acceleration2x;                 // steps/s^2
 
     volatile float currentSpeed;          // steps/s
     volatile float speedSquared;
     volatile float desiredSpeed;          // steps/s (cap)
-    float acceleration2x;                 // steps/s^2
 
-    int mode;                             // one of STOPPED, POSITION, VELOCITY
-    int32_t currentPosition;
-    int32_t desiredPosition;
-    int32_t stepIncrement;                // +1 or -1
+    volatile int stopping;
+    volatile int mode;                             // one of STOPPED, POSITION, VELOCITY
+    volatile int32_t currentPosition;
+    volatile int32_t desiredPosition;
+    volatile int32_t stepIncrement;                // +1 or -1
 
 } Stepper;
 
@@ -84,10 +85,15 @@ typedef struct {
 void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration);
 void moveToPosition(Stepper *s, float initialSpeed, int32_t desiredPosition);
 void stepperStart(Stepper *s, float desiredSpeed, int direction);
-void stopAndWait(Stepper *s);
+
+void stop(Stepper *s);
+void waitUntilStopped(Stepper *s);
+void changeSpeed(Stepper *s, float newSpeed);
+
+void printStepperInfo(Stepper *s);
 
 void computeNextStepperEvent(Stepper *s);
 void stepperHandleIrq(Stepper *s);
-void printStepperInfo(Stepper *s);
+
 
 #endif // STEPPER_H
