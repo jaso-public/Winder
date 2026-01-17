@@ -63,9 +63,9 @@ int e[CELLS];
 
 void waitAndRecord(int cell) {
     if(carriageStepper.stepIncrement > 0) {
-        while(carriageStepper.currentPosition < x[cell]);
+        while(carriageStepper.currentPosition < x[cell] || carriageStepper.mode == STOPPED);
     } else {
-        while(carriageStepper.currentPosition > x[cell]);
+        while(carriageStepper.currentPosition > x[cell] || carriageStepper.mode == STOPPED);
     }
     y[cell] = barrelStepper.currentPosition;
     e[cell] = readEncoderValue();
