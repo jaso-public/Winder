@@ -30,26 +30,74 @@ extern Stepper carriageStepper;
 #define STEPS_PER_INCH 25000
 #define STEPS_PER_REVOLUTION 10880
 #define COUNT_PER_INCH 610
+#define CELLS 128
 
 #define DEBOUNCE_DELAY 20
 
 extern ButtonState bs;
 
 
-
+// the y component of the motion (this is the amount of curved length around the barrel)
 float yDis(float eCnt, float xCnt) {
     float h = eCnt / COUNT_PER_INCH;
     float a = xCnt / STEPS_PER_INCH;
     return sqrt(h*h - a*a);
 }
 
-float diameter(float yCnt, float yDis) {
-    return yDis * STEPS_PER_REVOLUTION / yCnt / 3.14159268;
+float circumference(float yCnt, float yDis) {
+    return yDis * STEPS_PER_REVOLUTION / yCnt;
 }
 
+float diameter(float circumference) {
+    return circumference / 3.14159268;
+}
 int isLeft() {
 	return HAL_GPIO_ReadPin(ButtonLeft_GPIO_Port, ButtonLeft_Pin) == 0;
 }
+
+
+int x[CELLS];
+int y[CELLS];
+int e[CELLS];
+
+
+void waitAndRecord(int cell) {
+    while(carriageStepper.currentPosition != x[cell]);
+    y[cell] = barrelStepper.currentPosition;
+    e[cell] = readEncoderValue();
+}
+
+void profile1() {
+    float start =  0.450;
+    float end =   17.625;
+
+    float delta = end-start;
+
+    int cells = delta * 4;
+    float width = delta / cells;
+
+    for(int i=0 ; i<cells ; i++) {
+        x[i] = (start + (i * width)) * STEPS_PER_INCH;
+    }
+    x[cells] = end * STEPS_PER_INCH;
+
+    // for(int i=0 ; i<=cells ; i++) printf("%d: %d  delta:%d\n", i, x[i], (x[i+1]-x[i]));
+
+
+    // start the barrel rotating
+    barrelStepper.currentPosition = 0;
+    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/4, CW);
+
+    // make the first pass measurements
+    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, x[cells]);
+    for(int i=0 ; i<=cells ; i++) waitAndRecord(i);
+
+    stop(&barrelStepper);
+    waitUntilStopped(&barrelStepper);
+ }
+
+
+
 
 int isRight() {
 	return HAL_GPIO_ReadPin(ButtonRight_GPIO_Port, ButtonRight_Pin) == 0;
@@ -509,14 +557,15 @@ void doBoth() {
         snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", c);
         lcd_write_string(buffer);
 
-        float dia = diameter((b-bo), yDis((e-eo), (c-co)));
+        float yd= yDis((e-eo), (c-co));
+        float circum = circumference((b-bo), yd);
 
         lcd_set_cursor(0, 3);
-        snprintf(buffer, sizeof(buffer), "Diameter: %.3f   ", dia);
+        snprintf(buffer, sizeof(buffer), "Circum: %.3f   ", circum);
         lcd_write_string(buffer);
 
 
-        printf("%ld(%ld) %ld(%ld) %ld(%ld) dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), dia);
+        printf("%ld(%ld) %ld(%ld) %ld(%ld) dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), circum);
         co=c; bo=b; eo = e;
 
         // break out of the loop to stop early
@@ -659,11 +708,14 @@ int main_menu(char* date, char* time) {
             display_menu(prompt, selections, count, current, start);
 
             if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
+            if(strcmp(selections[current], "Barrel Profile 1") == 0) profile1();
+
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
 
             if(strcmp(selections[current], "Calibrate Carriage") == 0) calibrateCarriage();
             if(strcmp(selections[current], "Calibrate Barrel") == 0) calibrateBarrel();
+
 
             if(strcmp(selections[current], "Barrel Profile 1") == 0) doBoth();
 

@@ -7,3 +7,4 @@ Debug/
 STM32F303K8TX_FLASH.ld
 Winder Debug.launch
 
+/.DS_Store
