@@ -63,14 +63,14 @@ int e[CELLS];
 
 void waitAndRecord(int cell) {
     if(carriageStepper.stepIncrement > 0) {
-        while(carriageStepper.currentPosition > x[cell]);
-    } else {
         while(carriageStepper.currentPosition < x[cell]);
+    } else {
+        while(carriageStepper.currentPosition > x[cell]);
     }
     y[cell] = barrelStepper.currentPosition;
     e[cell] = readEncoderValue();
 
-    printf("%d %d %d\r\n", x[cell], y[cell], e[cell]);
+    printf("pos:%ld  x:%d y:%d e:%d\r\n", carriageStepper.currentPosition, x[cell], y[cell], e[cell]);
 }
 
 void profile1() {
