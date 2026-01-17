@@ -195,7 +195,7 @@ void computeNextStepperEvent(Stepper *s) {
     } else if (s->currentSpeed > s->desiredSpeed) {
         // we need to brake to reach the desired speed
         s->speedSquared -= s->acceleration2x;
-        if (s->speedSquared <= s->desiredSpeed) {
+        if (s->speedSquared <= s->desiredSpeed * s->desiredSpeed) {
             s->currentSpeed = s->desiredSpeed;
             s->speedSquared = s->currentSpeed * s->currentSpeed;
         } else {
@@ -207,6 +207,7 @@ void computeNextStepperEvent(Stepper *s) {
         s->speedSquared = 0.0f;
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
         s->mode = STOPPED;
+        s->stopping = 0;
         return;
     }
 
