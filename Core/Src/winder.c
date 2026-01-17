@@ -93,6 +93,11 @@ void profile1() {
     for(int i=0 ; i<=cells ; i++) waitAndRecord(i);
 
     stop(&barrelStepper);
+
+    while(1) {
+        HAL_Delay(500);
+        printStepperInfo(&barrelStepper);
+    }
     waitUntilStopped(&barrelStepper);
  }
 

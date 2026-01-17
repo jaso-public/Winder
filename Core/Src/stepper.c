@@ -167,7 +167,7 @@ void computeNextStepperEvent(Stepper *s) {
     StepperConfiguration *cfg = s->config;
 
     if (s->mode == POSITION) {
-        // we want to get the stepper to a particular Steps with a velocity of zero
+        // we want to get the stepper to a particular step with a velocity of zero
         uint32_t stepsToStop = (uint32_t) ceilf(s->speedSquared / s->acceleration2x);
         int32_t stepsRemaining = s->desiredPosition - s->currentPosition;
         if(stepsRemaining < 0) stepsRemaining = -stepsRemaining;
@@ -176,9 +176,7 @@ void computeNextStepperEvent(Stepper *s) {
         if (stepsRemaining <= stepsToStop) {
             s->desiredSpeed = 0.0f;
         }
-    }
-
-    if (s->mode == VELOCITY && s->stopping) {
+    } else if (s->mode == VELOCITY && s->stopping) {
         s->desiredSpeed = 0.0f;
     }
 
