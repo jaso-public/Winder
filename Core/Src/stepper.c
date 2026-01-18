@@ -173,7 +173,7 @@ void computeNextStepperEvent(Stepper *s) {
         if(stepsRemaining < 0) stepsRemaining = -stepsRemaining;
 
         if(s->stopping) stepsRemaining = stepsToStop;
-        if (stepsRemaining <= stepsToStop + 1) {
+        if (stepsRemaining < stepsToStop) {
             s->desiredSpeed = 0.0f;
             s->stopping = 1;
         }
