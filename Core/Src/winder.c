@@ -63,13 +63,11 @@ int e[CELLS];
 
 void waitAndRecord(int cell) {
     if(carriageStepper.stepIncrement > 0) {
-        while(carriageStepper.currentPosition < x[cell] || carriageStepper.mode != STOPPED)
-            printStepperInfo(&carriageStepper);
-
+        while(carriageStepper.currentPosition < x[cell] || carriageStepper.mode != STOPPED);
     } else {
-        while(carriageStepper.currentPosition > x[cell] || carriageStepper.mode != STOPPED)
-            printStepperInfo(&carriageStepper);
+        while(carriageStepper.currentPosition > x[cell] || carriageStepper.mode != STOPPED);
     }
+
     y[cell] = barrelStepper.currentPosition;
     e[cell] = readEncoderValue();
 
@@ -102,12 +100,12 @@ void profile1() {
     for(int i=0 ; i<=cells ; i++) waitAndRecord(i);
 
     stop(&barrelStepper);
-
-    while(1) {
-        HAL_Delay(500);
-        printStepperInfo(&barrelStepper);
-    }
     waitUntilStopped(&barrelStepper);
+
+    printStepperInfo(&barrelStepper);
+    printStepperInfo(&carriageStepper);
+
+    for(int i=0 ; i<=cells ; i++) printf("%d: x:%d(%d) y:%d(%d) e:%d(%d)\r\n", i, x[i], (x[i+1]-x[i]), y[i], (y[i+1]-y[i]), e[i], (e[i+1]-e[i]));
  }
 
 
