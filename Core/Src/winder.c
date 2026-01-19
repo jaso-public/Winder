@@ -62,9 +62,12 @@ int e[CELLS];
 
 
 void waitAndRecord(int cell) {
+
     if(carriageStepper.stepIncrement > 0) {
+        printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", carriageStepper.currentPosition, x[cell], cell);
         while(carriageStepper.currentPosition < x[cell] || carriageStepper.mode != STOPPED);
     } else {
+        printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", carriageStepper.currentPosition, x[cell], cell);
         while(carriageStepper.currentPosition > x[cell] || carriageStepper.mode != STOPPED);
     }
 
@@ -77,7 +80,7 @@ void waitAndRecord(int cell) {
 void profile1() {
     float start =  0.450;
 //  float end =   17.625;
-    float end =    7.625;
+    float end =    5.0;
 
     float delta = end-start;
 
