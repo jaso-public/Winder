@@ -65,11 +65,10 @@ void waitAndRecord(int cell) {
 
     if(carriageStepper.stepIncrement > 0) {
         printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
-        while(getPosition(&carriageStepper) < x[cell] || carriageStepper.mode != STOPPED)
-            printf("pos:%d\r\n", getPosition(&carriageStepper));
+        while(getPosition(&carriageStepper) < x[cell]);
     } else {
         printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
-        while(getPosition(&carriageStepper) > x[cell] || carriageStepper.mode != STOPPED);
+        while(getPosition(&carriageStepper) > x[cell]);
     }
 
     y[cell] = barrelStepper.currentPosition;
