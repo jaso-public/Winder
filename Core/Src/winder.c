@@ -674,13 +674,13 @@ int main_menu(char* date, char* time) {
     char* prompt = "Select:";
     char* selections[] = {
             "Home Carriage",
+            "Profile 1",
+            "Profile 2",
             "Move Carriage",
             "Move Barrel",
             "Read Encoder",
             "Calibrate Carriage",
             "Calibrate Barrel",
-            "Barrel Profile 1",
-            "Barrel Profile 2",
             "Test Lights",
             "Test Left Limit",
             "Test Right Limit",
@@ -720,7 +720,7 @@ int main_menu(char* date, char* time) {
             display_menu(prompt, selections, count, current, start);
 
             if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
-            if(strcmp(selections[current], "Barrel Profile 1") == 0) profile1();
+            if(strcmp(selections[current], "Profile 1") == 0) profile1();
 
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
@@ -729,7 +729,7 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Calibrate Barrel") == 0) calibrateBarrel();
 
 
-            if(strcmp(selections[current], "Barrel Profile 1") == 0) doBoth();
+            if(strcmp(selections[current], "Profile 2") == 0) doBoth();
 
 
             if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();
