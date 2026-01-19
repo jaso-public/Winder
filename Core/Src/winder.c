@@ -113,7 +113,7 @@ void profile1() {
 
     printf("unwinding\r\n");
     moveToPosition(&carriageStepper, STEPS_PER_INCH/2, 0);
-    moveToPosition(&barrelStepper, STEPS_PER_INCH/2, 0);
+    moveToPosition(&barrelStepper, STEPS_PER_REVOLUTION/4, 0);
 
     waitUntilStopped(&carriageStepper);
     waitUntilStopped(&barrelStepper);
