@@ -140,7 +140,7 @@ void changeSpeed(Stepper *s, float newSpeed) {
     __set_PRIMASK(primask_bit);
 }
 
-int32_t getPosition(Stepper *s) {
+__attribute__((noinline)) int32_t getPosition(Stepper *s) {
     uint32_t primask_bit = __get_PRIMASK();
     __disable_irq();
     __DSB();
