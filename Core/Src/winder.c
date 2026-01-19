@@ -65,7 +65,8 @@ void waitAndRecord(int cell) {
 
     if(carriageStepper.stepIncrement > 0) {
         printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
-        while(getPosition(&carriageStepper) < x[cell] || carriageStepper.mode != STOPPED);
+        while(getPosition(&carriageStepper) < x[cell] || carriageStepper.mode != STOPPED)
+            printf("pos:%d\r\n", getPosition(&carriageStepper));
     } else {
         printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
         while(getPosition(&carriageStepper) > x[cell] || carriageStepper.mode != STOPPED);
@@ -110,6 +111,13 @@ void profile1() {
     printStepperInfo(&carriageStepper);
 
     for(int i=0 ; i<=cells ; i++) printf("%d: x:%d(%d) y:%d(%d) e:%d(%d)\r\n", i, x[i], (x[i+1]-x[i]), y[i], (y[i+1]-y[i]), e[i], (e[i+1]-e[i]));
+
+    printf("unwinding\r\n");
+    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, 0);
+    moveToPosition(&barrelStepper, STEPS_PER_INCH/2, 0);
+
+    waitUntilStopped(&carriageStepper);
+    waitUntilStopped(&barrelStepper);
  }
 
 
