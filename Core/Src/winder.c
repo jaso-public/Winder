@@ -76,7 +76,8 @@ void waitAndRecord(int cell) {
 
 void profile1() {
     float start =  0.450;
-    float end =   17.625;
+//  float end =   17.625;
+    float end =    7.625;
 
     float delta = end-start;
 
