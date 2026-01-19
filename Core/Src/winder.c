@@ -64,17 +64,17 @@ int e[CELLS];
 void waitAndRecord(int cell) {
 
     if(carriageStepper.stepIncrement > 0) {
-        printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", carriageStepper.currentPosition, x[cell], cell);
-        while(carriageStepper.currentPosition < x[cell] || carriageStepper.mode != STOPPED);
+        printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
+        while(getPosition(&carriageStepper) < x[cell] || carriageStepper.mode != STOPPED);
     } else {
-        printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", carriageStepper.currentPosition, x[cell], cell);
-        while(carriageStepper.currentPosition > x[cell] || carriageStepper.mode != STOPPED);
+        printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
+        while(getPosition(&carriageStepper) > x[cell] || carriageStepper.mode != STOPPED);
     }
 
     y[cell] = barrelStepper.currentPosition;
     e[cell] = readEncoderValue();
 
-    printf("pos:%ld  x:%d y:%d e:%d\r\n", carriageStepper.currentPosition, x[cell], y[cell], e[cell]);
+    printf("pos:%ld  x:%d y:%d e:%d\r\n", getPosition(&carriageStepper), x[cell], y[cell], e[cell]);
 }
 
 void profile1() {

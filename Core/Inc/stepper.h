@@ -67,7 +67,7 @@ typedef struct {
 	StepperConfiguration *config;
 
 	volatile uint32_t lastPulseTick;               // last scheduled rising tick
-    float acceleration2x;                 // steps/s^2
+	volatile float acceleration2x;                 // steps/s^2
 
     volatile float currentSpeed;          // steps/s
     volatile float speedSquared;
@@ -89,6 +89,9 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction);
 void stop(Stepper *s);
 void waitUntilStopped(Stepper *s);
 void changeSpeed(Stepper *s, float newSpeed);
+
+int32_t getPosition(Stepper *s);
+
 
 void printStepperInfo(Stepper *s);
 

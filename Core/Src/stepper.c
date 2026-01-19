@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "stepper.h"
+#include "stm32f3xx.h"
+
 
 
 void stepperInit(Stepper *s, StepperConfiguration *cfg, float acceleration)
@@ -134,7 +136,17 @@ void changeSpeed(Stepper *s, float newSpeed) {
     uint32_t primask_bit = __get_PRIMASK();
     __disable_irq();
     s->desiredSpeed = newSpeed;
+    __DSB();
     __set_PRIMASK(primask_bit);
+}
+
+int32_t getPosition(Stepper *s) {
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
+    __DSB();
+    int32_t result = s->currentPosition;
+    __set_PRIMASK(primask_bit);
+    return result;
 }
 
 
@@ -207,11 +219,12 @@ void computeNextStepperEvent(Stepper *s) {
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
         s->mode = STOPPED;
         s->stopping = 0;
-        return;
+    } else {
+        s->lastPulseTick += (uint32_t) (TIMER_CLOCK_HZ / s->currentSpeed);
+        *cfg->compareRegister = s->lastPulseTick;
     }
 
-    s->lastPulseTick += (uint32_t) (TIMER_CLOCK_HZ / s->currentSpeed);
-    *cfg->compareRegister = s->lastPulseTick;
+    __DSB();
 }
 
 
@@ -229,6 +242,7 @@ void stepperHandleIrq(Stepper *s) {
         if(s->mode == POSITION && s->currentPosition == s->desiredPosition) {
             __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
             s->mode = STOPPED;
+            __DSB();
             return;
         }
         NVIC_SetPendingIRQ(cfg->computeIrqNumber);
@@ -237,5 +251,6 @@ void stepperHandleIrq(Stepper *s) {
         HAL_GPIO_WritePin(cfg->pulsePort, cfg->pulsePin, GPIO_PIN_SET);
         *cfg->compareRegister = htim->Instance->CNT + cfg->pulseWidthTicks;
     }
+    __DSB();
 }
 
