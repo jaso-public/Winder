@@ -36,6 +36,8 @@ extern Stepper carriageStepper;
 
 extern ButtonState bs;
 
+int carriageLocationKnown = 0;
+
 
 // the y component of the motion (this is the amount of curved length around the barrel)
 float yDis(float eCnt, float xCnt) {
@@ -78,6 +80,23 @@ void waitAndRecord(int cell) {
 }
 
 void profile1() {
+
+    if(! carriageLocationKnown) {
+        lcd_clear();
+        lcd_write_string("Barrel Profile 1");
+        lcd_set_cursor(0, 1);
+        lcd_write_string("Winder Pos Unknown");
+        lcd_set_cursor(0, 2);
+        lcd_write_string("Home the carriage");
+        lcd_set_cursor(0, 3);
+        lcd_write_string("Press 'C' to continue");
+
+        while(1) {
+            updateButtonState(&bs);
+            if(newPress(&bs.left)) return;
+        }
+    }
+
     float start =  0.450;
 //  float end =   17.625;
     float end =    5.0;
@@ -432,10 +451,9 @@ void homeCarriage() {
     lcd_clear();
     lcd_write_string("Home the carriage");
     lcd_set_cursor(0, 1);
-    lcd_write_string("move away from sensor");
+    lcd_write_string("move away frm sensor");
 
     moveToPositionAndWait(1000, 1000);
-
 
     lcd_clear();
     lcd_write_string("Home the carriage");
@@ -443,6 +461,9 @@ void homeCarriage() {
     lcd_write_string("Slow spd to sensor");
 
     waitForOptical(250);
+    carriageLocationKnown = 1;
+    carriageStepper.currentPosition = 0;
+
 }
 
 void displayOpto(int opt) {
