@@ -6,6 +6,8 @@
  */
 
 
+#include <string.h>
+
 /**
  * converts a date formatted like __DATE__  i.e. Jan 15, 2025
  * into a date formatted as 01/15/25

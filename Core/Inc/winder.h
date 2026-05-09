@@ -55,6 +55,6 @@ int isTop();
 int isBottom();
 int isCenter();
 
-int main_menu();
+int main_menu(char* date, char* time);
 
 #endif /* INC_WINDER_H_ */
