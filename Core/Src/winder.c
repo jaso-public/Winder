@@ -34,9 +34,18 @@ extern Stepper carriageStepper;
 
 #define DEBOUNCE_DELAY 20
 
+// diameter denoising: accept latest reading if within these thresholds
+#define OUTLIER_TEMPORAL_THRESHOLD 0.05f   // inches — max deviation from avg of last two
+#define OUTLIER_SPATIAL_THRESHOLD  0.05f   // inches — max deviation from neighbor average
+
 extern ButtonState bs;
 
 int carriageLocationKnown = 0;
+int profileCells = 0;
+
+static float diamHistory[3][CELLS];
+static int   diamHistoryCount = 0;
+float        profileDiameters[CELLS];
 
 
 // the y component of the motion (this is the amount of curved length around the barrel)
@@ -79,6 +88,39 @@ void waitAndRecord(int cell) {
     printf("pos:%ld  x:%d y:%d e:%d\r\n", getPosition(&carriageStepper), x[cell], y[cell], e[cell]);
 }
 
+// Measure the barrel diameter profile between startPos and endPos (in steps).
+// Both motors run simultaneously: barrel at barrelSpeed, carriage at carriageSpeed.
+// Samples CELLS-1 evenly-spaced cells, then holds at endPos for one full barrel
+// revolution before returning both motors to their starting positions.
+void measureProfile(int32_t startPos, int32_t endPos, float barrelSpeed, float carriageSpeed) {
+    if (!carriageLocationKnown) return;
+
+    int cells = CELLS - 1;
+    profileCells = cells;
+
+    for (int i = 0; i <= cells; i++)
+        x[i] = startPos + (int32_t)((endPos - startPos) * i / cells);
+
+    barrelStepper.currentPosition = 0;
+    stepperStart(&barrelStepper, barrelSpeed, CW);
+
+    moveToPosition(&carriageStepper, carriageSpeed, endPos);
+    for (int i = 0; i <= cells; i++) waitAndRecord(i);
+
+    // one full rotation at the end to capture circumference there
+    moveToPosition(&barrelStepper, barrelSpeed, STEPS_PER_REVOLUTION);
+    waitUntilStopped(&barrelStepper);
+
+    // return to starting positions
+    moveToPosition(&carriageStepper, carriageSpeed, startPos);
+    moveToPosition(&barrelStepper,   barrelSpeed,   0);
+    waitUntilStopped(&carriageStepper);
+    waitUntilStopped(&barrelStepper);
+
+    for (int i = 0; i <= cells; i++)
+        printf("%d: x:%d y:%d e:%d\r\n", i, x[i], y[i], e[i]);
+}
+
 void profile1() {
 
     if(! carriageLocationKnown) {
@@ -104,6 +146,7 @@ void profile1() {
     float delta = end-start;
 
     int cells = delta * 4;
+    profileCells = cells;
     float width = delta / cells;
 
     for(int i=0 ; i<cells ; i++) {
@@ -635,12 +678,171 @@ void doBoth() {
         if(newPress(&bs.center)) break;
     }
 
-
-
-
 }
 
 
+
+// Compute per-cell diameters from raw profile data, apply temporal and spatial outlier
+// rejection, and store the result in profileDiameters[].  Call after measureProfile().
+void updateDiameterProfile() {
+    int n = profileCells;
+    float raw[CELLS];
+
+    for (int i = 0; i < n; i++) {
+        float de = fabsf((float)(e[i+1] - e[i]));
+        float dx = fabsf((float)(x[i+1] - x[i]));
+        float dy = fabsf((float)(y[i+1] - y[i]));
+        raw[i] = (dy >= 1.0f) ? diameter(circumference(dy, yDis(de, dx))) : 0.0f;
+    }
+
+    // temporal: if latest deviates too far from avg of the previous two, use that avg instead
+    float filtered[CELLS];
+    for (int i = 0; i < n; i++) {
+        if (diamHistoryCount >= 2) {
+            float prev1 = diamHistory[(diamHistoryCount - 1) % 3][i];
+            float prev2 = diamHistory[(diamHistoryCount - 2) % 3][i];
+            float ref   = (prev1 + prev2) * 0.5f;
+            filtered[i] = fabsf(raw[i] - ref) > OUTLIER_TEMPORAL_THRESHOLD ? ref : raw[i];
+        } else {
+            filtered[i] = raw[i];
+        }
+    }
+
+    // spatial: if a cell deviates too far from its neighbors, replace with neighbor average
+    for (int i = 1; i < n - 1; i++) {
+        float neighborAvg = (filtered[i-1] + filtered[i+1]) * 0.5f;
+        if (fabsf(filtered[i] - neighborAvg) > OUTLIER_SPATIAL_THRESHOLD)
+            filtered[i] = neighborAvg;
+    }
+
+    for (int i = 0; i < n; i++) {
+        diamHistory[diamHistoryCount % 3][i] = filtered[i];
+        profileDiameters[i] = filtered[i];
+    }
+    diamHistoryCount++;
+}
+
+// Returns the total number of passes (both directions combined) needed to fully cover the
+// barrel at the given winding angle without gaps, using the thinnest point in the offset range.
+int computePasses(float windingAngleDeg, float towWidth, int32_t startOffset, int32_t endOffset) {
+    if (profileCells == 0) return 0;
+
+    int32_t startPos = x[0]            + startOffset;
+    int32_t endPos   = x[profileCells] - endOffset;
+
+    float minDiam = -1.0f;
+    for (int i = 0; i < profileCells; i++) {
+        if (x[i] < startPos || x[i+1] > endPos) continue;
+        if (minDiam < 0.0f || profileDiameters[i] < minDiam) minDiam = profileDiameters[i];
+    }
+
+    if (minDiam <= 0.0f) return 0;
+    float sinA = sinf(windingAngleDeg * 3.14159265f / 180.0f);
+    return (int)ceilf(minDiam * 3.14159265f * sinA / towWidth);
+}
+
+static float carriageSpeedForSegment(int from, int to, int totalPasses, float towWidth, float barrelSpeed);
+
+// Move the carriage to toPos, updating speed at each cell boundary to maintain the correct
+// winding angle.  Direction is inferred from the carriage's current position.  Assumes the
+// barrel is already spinning.  Returns when the carriage has stopped at toPos.
+void single_pass(int32_t toPos, int totalPasses, float towWidth, float barrelSpeed) {
+    int n = profileCells;
+    int forward = (toPos > carriageStepper.currentPosition);
+
+    if (forward) {
+        moveToPosition(&carriageStepper,
+                       carriageSpeedForSegment(0, 1, totalPasses, towWidth, barrelSpeed),
+                       toPos);
+        for (int i = 1; i < n; i++) {
+            if (x[i] >= toPos) break;
+            while (getPosition(&carriageStepper) < x[i]);
+            changeSpeed(&carriageStepper,
+                        carriageSpeedForSegment(i, i + 1, totalPasses, towWidth, barrelSpeed));
+        }
+    } else {
+        moveToPosition(&carriageStepper,
+                       carriageSpeedForSegment(n, n - 1, totalPasses, towWidth, barrelSpeed),
+                       toPos);
+        for (int i = n - 1; i > 0; i--) {
+            if (x[i] <= toPos) break;
+            while (getPosition(&carriageStepper) > x[i]);
+            changeSpeed(&carriageStepper,
+                        carriageSpeedForSegment(i, i - 1, totalPasses, towWidth, barrelSpeed));
+        }
+    }
+
+    waitUntilStopped(&carriageStepper);
+}
+
+// Carriage speed (steps/sec) for a profile segment, read from the filtered diameter array.
+// seg = min(from, to) is the cell index; both directions map to the same segment diameter.
+static float carriageSpeedForSegment(int from, int to, int totalPasses, float towWidth, float barrelSpeed) {
+    int   seg  = from < to ? from : to;
+    float diam = profileDiameters[seg];
+    if (diam <= 0.0f) return 100.0f;
+    float circ = diam * 3.14159265f;
+    float sinA = (totalPasses * towWidth) / circ;
+    if (sinA >= 1.0f) sinA = 0.999f;
+    float tanA = sinA / sqrtf(1.0f - sinA * sinA);
+    return (circ / tanA) * (barrelSpeed / STEPS_PER_REVOLUTION) * STEPS_PER_INCH;
+}
+
+// Wait until the barrel reaches the next unused slot at this end of the barrel.
+// Slots are totalSlots evenly-spaced angular positions (stride steps apart) anchored at
+// barrelRef.  We pick the lowest-numbered unused slot whose barrel position is at least
+// minTurn steps away, then spin until the barrel gets there.
+static void waitForSlot(int *slotUsed, int totalSlots, int32_t barrelRef,
+                        int32_t stride, int32_t minTurn) {
+    int32_t earliest = barrelStepper.currentPosition + minTurn;
+    // first slot index k such that barrelRef + k*stride >= earliest
+    int32_t offset = earliest - barrelRef;
+    int32_t k = (offset + stride - 1) / stride;
+    while (1) {
+        int idx = (int)(k % totalSlots);
+        if (!slotUsed[idx]) {
+            slotUsed[idx] = 1;
+            int32_t target = barrelRef + k * stride;
+            while (barrelStepper.currentPosition < target);
+            return;
+        }
+        k++;
+    }
+}
+
+// Wind one layer (passesPerDir passes in each direction) over the barrel.
+// towWidth:     fiber tow width in inches
+// passesPerDir: passes per direction (e.g. 5 → 10 total strips)
+// barrelSpeed:  barrel stepper speed in steps/sec
+// startOffset:  steps added to x[0] for the near-end winding position
+// endOffset:    steps subtracted from x[n] for the far-end winding position
+void layer(float towWidth, int passesPerDir, float barrelSpeed, int32_t startOffset, int32_t endOffset) {
+    if (!carriageLocationKnown || profileCells == 0) return;
+
+    int     totalPasses = 2 * passesPerDir;
+    int32_t startPos    = x[0] + startOffset;
+    int32_t endPos      = x[profileCells] - endOffset;
+    int32_t stride      = STEPS_PER_REVOLUTION / totalPasses;
+    int32_t minTurn     = (int32_t)(STEPS_PER_REVOLUTION * 3 / 4);
+    int32_t barrelRef   = barrelStepper.currentPosition;
+
+    // one slot-used array per end; totalPasses slots evenly cover one full revolution
+    int highSlotUsed[totalPasses];
+    int lowSlotUsed[totalPasses];
+    memset(highSlotUsed, 0, totalPasses * sizeof(int));
+    memset(lowSlotUsed,  0, totalPasses * sizeof(int));
+
+    
+    for (int pass = 0; pass < passesPerDir; pass++) {
+        printf("layer pass %d/%d fwd\r\n", pass + 1, passesPerDir);
+        single_pass(endPos,   totalPasses, towWidth, barrelSpeed);
+        waitForSlot(highSlotUsed, totalPasses, barrelRef, stride, minTurn);
+
+        printf("layer pass %d/%d rev\r\n", pass + 1, passesPerDir);
+        single_pass(startPos, totalPasses, towWidth, barrelSpeed);
+        waitForSlot(lowSlotUsed,  totalPasses, barrelRef, stride, minTurn);
+    }
+}
 
 void display_menu(char* prompt, char** options, int count, int current, int start) {
 
@@ -697,9 +899,6 @@ void displayInfo(char* date, char* time) {
         if(newPress(&bs.center)) return;
     }
 }
-
-
-
 
 int main_menu(char* date, char* time) {
 

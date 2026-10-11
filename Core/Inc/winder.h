@@ -55,6 +55,12 @@ int isTop();
 int isBottom();
 int isCenter();
 
+void measureProfile(int32_t startPos, int32_t endPos, float barrelSpeed, float carriageSpeed);
+void updateDiameterProfile(void);
+int  computePasses(float windingAngleDeg, float towWidth, int32_t startOffset, int32_t endOffset);
+void single_pass(int32_t toPos, int totalPasses, float towWidth, float barrelSpeed);
+void layer(float towWidth, int passesPerDir, float barrelSpeed, int32_t startOffset, int32_t endOffset);
+
 int main_menu(char* date, char* time);
 
 #endif /* INC_WINDER_H_ */
