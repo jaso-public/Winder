@@ -21,15 +21,14 @@
 
 #include "stepper.h"
 #include "winder.h"
+#include "wrap.h"
+#include "wrap_ui.h"      // fmtFixed(): the build has no float printf
 #include "gitversion.h"
 
 extern Stepper barrelStepper;
 extern Stepper carriageStepper;
 
 
-#define STEPS_PER_INCH 25000
-#define STEPS_PER_REVOLUTION 10880
-#define COUNT_PER_INCH 610
 #define CELLS 128
 
 #define DEBOUNCE_DELAY 20
@@ -387,7 +386,7 @@ void showDisplay(Stepper* s, uint8_t left) {
     char buffer[20];
     lcd_clear();
     lcd_write_string(left?"Left ":"Right ");
-    sprintf(buffer, "%.1f", s->desiredSpeed);
+    sprintf(buffer, "%ld", (long)s->desiredSpeed);
     lcd_write_string(buffer);
 }
 
@@ -413,7 +412,7 @@ void moveStepper(Stepper* s) {
         if(newPress(&bs.left) && !running) {
             running = 1;
             stepperStart(s, 10000, CW);
-            printf("left %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            printf("left %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
             left = 1;
             showDisplay(s, left);
         }
@@ -421,26 +420,26 @@ void moveStepper(Stepper* s) {
         if(newPress(&bs.right) && !running) {
             running = 1;
             stepperStart(s, 10000, CCW);
-            printf("right %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            printf("right %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
             left = 0;
             showDisplay(s, left);
         }
 
         if(newPress(&bs.center)) {
             stop(s);
-            printf("center %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            printf("center %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
             showDisplay(s, left);
         }
 
         if(newPress(&bs.top)) {
              changeSpeed(s, s->desiredSpeed * 1.1);
-             printf("top %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+             printf("top %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
              showDisplay(s, left);
         }
 
         if(newPress(&bs.bottom)) {
             changeSpeed(s, s->desiredSpeed / 1.1);
-            printf("bottom %.1f %.1f\r\n", s->desiredSpeed, s->currentSpeed);
+            printf("bottom %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
             showDisplay(s, left);
         }
 	}
@@ -648,11 +647,13 @@ void doBoth() {
         float circum = circumference((b-bo), yd);
 
         lcd_set_cursor(0, 3);
-        snprintf(buffer, sizeof(buffer), "Circum: %.3f   ", circum);
+        char circumText[12];
+        fmtFixed(circumText, sizeof(circumText), circum, 3);
+        snprintf(buffer, sizeof(buffer), "Circum: %-11s", circumText);   // 8 + 11 = 19 chars + NUL
         lcd_write_string(buffer);
 
 
-        printf("%ld(%ld) %ld(%ld) %ld(%ld) dia:%f\r\n", c,(c-co), b, (b-bo), e, (e-eo), circum);
+        printf("%ld(%ld) %ld(%ld) %ld(%ld) circum:%s\r\n", c,(c-co), b, (b-bo), e, (e-eo), circumText);
         co=c; bo=b; eo = e;
 
         // break out of the loop to stop early
@@ -904,6 +905,7 @@ int main_menu(char* date, char* time) {
 
     char* prompt = "Select:";
     char* selections[] = {
+            "Wrap",
             "Home Carriage",
             "Profile 1",
             "Profile 2",
@@ -950,6 +952,7 @@ int main_menu(char* date, char* time) {
 
             display_menu(prompt, selections, count, current, start);
 
+            if(strcmp(selections[current], "Wrap") == 0) wrap();
             if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
             if(strcmp(selections[current], "Profile 1") == 0) profile1();
 

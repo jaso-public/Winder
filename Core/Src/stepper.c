@@ -161,10 +161,10 @@ void printStepperInfo(Stepper *stepper) {
     printf("%s:\r\n", cfg->stepperName);
 
     printf("   lastPulseTick  : %lu\r\n", s.lastPulseTick);
-    printf("   currentSpeed   : %f\r\n", s.currentSpeed);
-    printf("   speedSquared   : %f\r\n", s.speedSquared);
-    printf("   desiredSpeed   : %f\r\n", s.desiredSpeed);
-    printf("   acceleration2x : %f\r\n", s.acceleration2x);
+    printf("   currentSpeed   : %ld\r\n", (long)s.currentSpeed);
+    printf("   speedSquared   : %ld\r\n", (long)s.speedSquared);
+    printf("   desiredSpeed   : %ld\r\n", (long)s.desiredSpeed);
+    printf("   acceleration2x : %ld\r\n", (long)s.acceleration2x);
 
     printf("   mode           : %d\r\n", s.mode);
     printf("   stopping       : %d\r\n", s.stopping);

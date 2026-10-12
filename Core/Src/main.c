@@ -25,6 +25,7 @@
 #include "stepper.h"
 
 #include "winder.h"
+#include "wrap.h"
 #include "lcd.h"
 #include "gitversion.h"
 
@@ -173,6 +174,9 @@ void Barrel_IRQHandler(void) {
 // Called by HAL once EXTI3 interrupt is handled
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == LimitSwitch_Pin) {
+	    // The switch cuts the drives in hardware; tell the software so it stops
+	    // and knows the carriage position is no longer trustworthy.
+	    wrapLimitTripped = 1;
 	}
 }
 

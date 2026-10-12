@@ -8,6 +8,9 @@
 #ifndef INC_WINDER_H_
 #define INC_WINDER_H_
 
+#include <stdint.h>
+#include "machine.h"
+
 // the clock is running at 36 Mhz
 #define TICKS_PER_SEC 36000000
 
@@ -60,6 +63,10 @@ void updateDiameterProfile(void);
 int  computePasses(float windingAngleDeg, float towWidth, int32_t startOffset, int32_t endOffset);
 void single_pass(int32_t toPos, int totalPasses, float towWidth, float barrelSpeed);
 void layer(float towWidth, int passesPerDir, float barrelSpeed, int32_t startOffset, int32_t endOffset);
+
+// carriage homing (winder.c)
+extern int carriageLocationKnown;
+void homeCarriage(void);
 
 int main_menu(char* date, char* time);
 
