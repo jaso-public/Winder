@@ -472,7 +472,10 @@ static WrapStatus prepare(void) {
 // ---------------------------------------------------------------------------
 
 // Turn the barrel back to where it was when winding started, at twice the last
-// winding speed.  The carriage stays where it is.  Left+Right stops it early.
+// winding speed, while the carriage moves to the unwind position (default 4"
+// left of home) so the fiber comes off clear.  If a limit switch tripped the
+// carriage position is unknown, so then only the barrel moves.
+// Left+Right stops both early.
 static void unwindBarrel(void) {
     int32_t back = stepsBetween(barrelStartPos, getPosition(&barrelStepper));
     if (back == 0) return;
@@ -480,14 +483,24 @@ static void unwindBarrel(void) {
     char turns[12], line[48];
     fmtFixed(turns, sizeof(turns), (float)back / STEPS_PER_REVOLUTION, 1);
     snprintf(line, sizeof(line), "%s turns back", turns);
+    int moveCarriage = carriageLocationKnown && !wrapLimitTripped;
     lightsSet(LIGHT_SETUP);                              // moving: stand clear
-    uiMessage("Unwinding barrel", line, "Carriage stays put", "L+R = stop");
+    uiMessage("Unwinding barrel", line,
+              moveCarriage ? "Carriage to unwind pos" : "Carriage stays put", "L+R = stop");
 
     float speed = 2.0f * (lastBarrelSpeed > 0.0f ? lastBarrelSpeed : cfg.barrelRps * STEPS_PER_REVOLUTION);
+    if (moveCarriage) {
+        int32_t pos = LEFT_DIR * (int32_t)(cfg.unwindPosIn * STEPS_PER_INCH + 0.5f);
+        if (getPosition(&carriageStepper) != pos) moveToPosition(&carriageStepper, PARK_SPEED, pos);
+    }
     moveToPosition(&barrelStepper, speed, barrelStartPos);
     int stopped = 0;
-    while (barrelStepper.mode != STOPPED) {
-        if (!stopped && isLeft() && isRight()) { stop(&barrelStepper); stopped = 1; }
+    while (barrelStepper.mode != STOPPED || carriageStepper.mode != STOPPED) {
+        if (!stopped && isLeft() && isRight()) {
+            stop(&barrelStepper);
+            stop(&carriageStepper);
+            stopped = 1;
+        }
         lightsService();
     }
     while (isLeft() || isRight()) {}                     // let go of the buttons

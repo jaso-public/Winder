@@ -80,7 +80,7 @@
 #include <stdint.h>
 #include "machine.h"
 
-#define WRAP_MAX_CELLS     96   // 96 x 0.25" = 24", more than the carriage travel
+#define WRAP_MAX_CELLS     96   // 96 x 0.25" = 24", more than WRAP_MAX_LENGTH_IN
 #define WRAP_MAX_CIRCUITS  12
 
 #define END_RIGHT 0
@@ -93,7 +93,8 @@
 typedef struct {
     // -- shape (the finished diameters are measured: the two shoulders) --
     float rightEndIn;        // carriage start, on the right shoulder, measured from home
-    float maxLengthIn;       // measure at most this far left looking for the left shoulder
+    float maxLengthIn;       // measure at most this far left looking for the left shoulder (<= 20")
+    float unwindPosIn;       // after a fault, the carriage goes here (from home) while unwinding
     float mandrelDiaIn;      // valley diameter: only a first guess, the measurement replaces it
     float stepMinIn;         // a diameter change at least this big is a shoulder
     int   fullFinish;        // 1 = fill the taper first, finish with shoulder-to-shoulder layers

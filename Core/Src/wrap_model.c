@@ -32,7 +32,8 @@
 
 void wrapDefaultConfig(WrapConfig *c) {
     c->rightEndIn      = 0.000f;
-    c->maxLengthIn     = 17.000f;
+    c->maxLengthIn     = WRAP_MAX_LENGTH_IN;
+    c->unwindPosIn     = 4.000f;
     c->mandrelDiaIn    = 1.250f;
     c->stepMinIn       = 0.100f;
     c->fullFinish      = 1;
@@ -58,6 +59,7 @@ void wrapDefaultConfig(WrapConfig *c) {
 
 const char *wrapCheckConfig(const WrapConfig *c) {
     if (c->maxLengthIn < 2.0f)                                return "Max length too short";
+    if (c->maxLengthIn > WRAP_MAX_LENGTH_IN + 0.001f)         return "Max length > 20 in";
     if (c->rightEndIn < 0.0f)                                 return "Right end < home";
     if (c->maxLengthIn / c->cellIn > WRAP_MAX_CELLS)          return "Too many cells";
     if (c->stepMinIn <= 0.0f)                                 return "Step min must be >0";

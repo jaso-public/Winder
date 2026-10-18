@@ -153,7 +153,8 @@ int uiEditConfig(WrapConfig *cfg) {
     WrapConfig w = *cfg;                         // edit a copy; keep it only on C
     const EditItem items[] = {
         { "Right end",   &w.rightEndIn,     0, 0.125f, 0.0f,  CARRIAGE_MAX_TRAVEL_IN, 3 },
-        { "Max length",  &w.maxLengthIn,    0, 0.250f, 2.0f,  CARRIAGE_MAX_TRAVEL_IN, 2 },
+        { "Max length",  &w.maxLengthIn,    0, 0.250f, 2.0f,  WRAP_MAX_LENGTH_IN, 2 },
+        { "Unwind at",   &w.unwindPosIn,    0, 0.250f, 0.0f,  CARRIAGE_MAX_TRAVEL_IN, 2 },
         { "Valley dia",  &w.mandrelDiaIn,   0, 0.010f, 0.5f,  12.0f, 3 },
         { "Step min",    &w.stepMinIn,      0, 0.010f, 0.02f, 1.0f,  2 },
         { "Tow width",   &w.towWidthIn,     0, 0.005f, 0.02f, 1.0f,  3 },

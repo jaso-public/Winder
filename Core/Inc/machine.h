@@ -13,8 +13,11 @@
 #define COUNT_PER_INCH        610     // fiber encoder counts per inch of fiber paid out
 
 // Usable carriage travel measured from the home (optical) sensor.
-// Taken from profile1()'s full-length end point; adjust if the machine allows more.
-#define CARRIAGE_MAX_TRAVEL_IN 17.625f
+// Calibrate Carriage drives 24" from home, so the machine has at least that.
+#define CARRIAGE_MAX_TRAVEL_IN 24.0f
+
+// The measurement never looks further than this for the left shoulder.
+#define WRAP_MAX_LENGTH_IN     20.0f
 
 // Stepper acceleration (steps/s^2) -- must match the value passed to stepperInit().
 #define STEPPER_ACCELERATION   300000.0f
