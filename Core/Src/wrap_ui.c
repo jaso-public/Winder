@@ -245,8 +245,22 @@ void uiShowLayer(int layer, const WrapModel *m, const LayerPlan *p) {
     uiLine(3, line);
 }
 
-void uiShowResult(WrapStatus s, int layer, const char *detail) {
+// Wait for C (returns 0) or Right (returns 1).
+static int waitForCenterOrRight(void) {
+    updateButtonState(&bs);
+    (void)newPress(&bs.center);
+    (void)newPress(&bs.right);
+    while (1) {
+        updateButtonState(&bs);
+        lightsService();
+        if (newPress(&bs.center)) return 0;
+        if (newPress(&bs.right))  return 1;
+    }
+}
+
+int uiShowResult(WrapStatus s, int layer, const char *detail, int canUnwind) {
     char lay[48];                                // uiLine() trims to 20
+    const char *last = canUnwind ? "C=menu  R=unwind" : "C = menu";
     snprintf(lay, sizeof(lay), "at layer %d", layer);
 
     switch (s) {
@@ -257,26 +271,30 @@ void uiShowResult(WrapStatus s, int layer, const char *detail) {
         break;
     case WRAP_ABORTED:
         lightsSet(LIGHT_WAITING);
-        uiMessage("Wrap stopped", "by operator", lay, "C = menu");
+        uiMessage("Wrap stopped", "by operator", lay, last);
         break;
     case WRAP_FIBER_OUT:
         lightsSet(LIGHT_FAULT);
-        uiMessage("FIBER OUT / BROKEN", lay, detail, "C = menu");
+        uiMessage("FIBER OUT / BROKEN", lay, detail, last);
         break;
     case WRAP_LIMIT_SWITCH:
         lightsSet(LIGHT_FAULT);
-        uiMessage("LIMIT SWITCH TRIPPED", lay, "Re-home carriage", "C = menu");
+        uiMessage("LIMIT SWITCH TRIPPED", lay, "Re-home carriage", last);
         break;
     case WRAP_NOT_HOMED:
         lightsSet(LIGHT_FAULT);
-        uiMessage("Carriage not homed", "Home it first", NULL, "C = menu");
+        uiMessage("Carriage not homed", "Home it first", NULL, last);
         break;
     case WRAP_CONFIG_ERROR:
         lightsSet(LIGHT_FAULT);
-        uiMessage("Settings problem:", detail, NULL, "C = menu");
+        uiMessage("Settings problem:", detail, NULL, last);
         break;
     default:
-        return;
+        return 0;
     }
-    uiWaitForCenter();
+    if (s == WRAP_COMPLETE || !canUnwind) {
+        uiWaitForCenter();
+        return 0;
+    }
+    return waitForCenterOrRight();
 }

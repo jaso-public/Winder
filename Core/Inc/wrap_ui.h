@@ -44,8 +44,9 @@ int  uiEditConfig(WrapConfig *cfg);
 void uiShowLayer(int layer, const WrapModel *m, const LayerPlan *p);
 void uiShowCircuit(int layer, int circuit, int circuits);
 
-// Fault / result screen.  Waits for C.
-void uiShowResult(WrapStatus status, int layer, const char *detail);
+// Fault / result screen.  Waits for C (back to the menu).  With canUnwind it
+// also offers Right = unwind; returns 1 if the operator chose that.
+int  uiShowResult(WrapStatus status, int layer, const char *detail, int canUnwind);
 
 // Fixed-point formatting (the build has no float printf).
 void fmtFixed(char *buf, int size, float value, int decimals);

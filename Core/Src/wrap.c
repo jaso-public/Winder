@@ -15,6 +15,7 @@
  *       modelUpdate()           (wrap_model.c) diameter estimate, once per layer
  *       modelPlanLayer()        (wrap_model.c) where and how fast the next layer goes
  *     stopAll() / uiShowResult()
+ *     unwindBarrel()            after a fault, if chosen: barrel back to where it started
  *
  * Timing rules
  * ------------
@@ -59,6 +60,11 @@ static int        cfgLoaded = 0;
 static WrapModel  model;
 static LayerPlan  plan;
 static char       faultDetail[21];
+
+// Where the barrel was when winding started, for unwinding after a fault.
+static int        barrelStarted;
+static int32_t    barrelStartPos;
+static float      lastBarrelSpeed;     // steps/s, the speed it was last winding at
 
 // A moment during the wrap: where the barrel was and how much fiber had gone out.
 typedef struct {
@@ -310,6 +316,9 @@ static WrapStatus windAllLayers(int *layerOut) {
     WrapStatus s;
 
     lightsSet(LIGHT_WINDING);
+    barrelStartPos  = getPosition(&barrelStepper);
+    barrelStarted   = 1;
+    lastBarrelSpeed = plan.barrelSpeed;
     stepperStart(&barrelStepper, plan.barrelSpeed, CW);
     Mark at = markNow();                                 // anchor wraps count as the first dwell
 
@@ -330,6 +339,7 @@ static WrapStatus windAllLayers(int *layerOut) {
         if (r == PLAN_COMPLETE) break;
 
         changeSpeed(&barrelStepper, plan.barrelSpeed);
+        lastBarrelSpeed = plan.barrelSpeed;
 
         // The next layer may turn around further in: move there (laying fiber as we go).
         int32_t newRight = boundaryPos(plan.firstCell);
@@ -403,6 +413,37 @@ static WrapStatus prepare(void) {
 
 
 // ---------------------------------------------------------------------------
+// Unwind after a fault
+// ---------------------------------------------------------------------------
+
+// Turn the barrel back to where it was when winding started, at twice the last
+// winding speed.  The carriage stays where it is.  Left+Right stops it early.
+static void unwindBarrel(void) {
+    int32_t back = stepsBetween(barrelStartPos, getPosition(&barrelStepper));
+    if (back == 0) return;
+
+    char turns[12], line[48];
+    fmtFixed(turns, sizeof(turns), (float)back / STEPS_PER_REVOLUTION, 1);
+    snprintf(line, sizeof(line), "%s turns back", turns);
+    lightsSet(LIGHT_SETUP);                              // moving: stand clear
+    uiMessage("Unwinding barrel", line, "Carriage stays put", "L+R = stop");
+
+    float speed = 2.0f * (lastBarrelSpeed > 0.0f ? lastBarrelSpeed : cfg.barrelRps * STEPS_PER_REVOLUTION);
+    moveToPosition(&barrelStepper, speed, barrelStartPos);
+    int stopped = 0;
+    while (barrelStepper.mode != STOPPED) {
+        if (!stopped && isLeft() && isRight()) { stop(&barrelStepper); stopped = 1; }
+        lightsService();
+    }
+    while (isLeft() || isRight()) {}                     // let go of the buttons
+
+    lightsSet(LIGHT_WAITING);
+    uiMessage(stopped ? "Unwind stopped" : "Unwind finished", NULL, NULL, "C = menu");
+    uiWaitForCenter();
+}
+
+
+// ---------------------------------------------------------------------------
 // wrap()
 // ---------------------------------------------------------------------------
 
@@ -413,6 +454,7 @@ WrapStatus wrap(void) {
     }
     faultDetail[0]   = 0;
     wrapLimitTripped = 0;
+    barrelStarted    = 0;
 
     // The barrel must be at rest before stepperStart() (it halts otherwise).
     stop(&barrelStepper);
@@ -426,6 +468,7 @@ WrapStatus wrap(void) {
     if (s == WRAP_LIMIT_SWITCH) carriageLocationKnown = 0;   // drives were cut: steps were lost
 
     if (s == WRAP_ABORTED && layer == 0) return s;            // cancelled during setup: back to menu
-    uiShowResult(s, layer, faultDetail);
+    int canUnwind = barrelStarted && s != WRAP_COMPLETE;
+    if (uiShowResult(s, layer, faultDetail, canUnwind)) unwindBarrel();
     return s;
 }
