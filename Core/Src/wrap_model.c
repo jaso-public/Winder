@@ -283,8 +283,11 @@ int modelPlanLayer(const WrapModel *m, const WrapConfig *c, LayerPlan *p) {
 
     float circRight = PI_F * (m->est[first]   + midLayer);
     float circLeft  = PI_F * (m->est[end - 1] + midLayer);
-    p->minDePerRev[END_RIGHT] = (int32_t)(FIBER_MIN_FRACTION * circRight * COUNT_PER_INCH);
-    p->minDePerRev[END_LEFT]  = (int32_t)(FIBER_MIN_FRACTION * circLeft  * COUNT_PER_INCH);
+    // The measurement pass only knows the mandrel guess: just catch "no fiber at all".
+    float minFraction = (p->kind == LAYER_MEASURE) ? 0.125f : FIBER_MIN_FRACTION;
+    p->fiberShift = (p->kind == LAYER_MEASURE) ? 3 : 1;
+    p->minDePerRev[END_RIGHT] = (int32_t)(minFraction * circRight * COUNT_PER_INCH);
+    p->minDePerRev[END_LEFT]  = (int32_t)(minFraction * circLeft  * COUNT_PER_INCH);
 
     // The measurement is a single out-and-back at the normal helix angle.
     p->circuits  = (p->kind == LAYER_MEASURE) ? 1 : c->circuits;

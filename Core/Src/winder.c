@@ -199,8 +199,8 @@ int isCenter() {
 	return HAL_GPIO_ReadPin(ButtonCenter_GPIO_Port, ButtonCenter_Pin) == 0;
 }
 
-uint8_t checkButton(Button *b, uint8_t status, uint64_t now) {
-    if( (now - b->time) < DEBOUNCE) return 0;
+uint8_t checkButton(Button *b, uint8_t status, uint32_t now) {
+    if( (uint32_t)(now - b->time) < DEBOUNCE_MS) return 0;
 
     if(b->pressed) {
         if(!status) {
@@ -237,7 +237,7 @@ void initializeButtonState(ButtonState *bs) {
 }
 
 void updateButtonState(ButtonState *bs) {
-    uint16_t now = TIM1->CNT;
+    uint32_t now = HAL_GetTick();     // ms; wrap-safe with the unsigned subtraction above
     checkButton(&bs->left, isLeft(), now);
     checkButton(&bs->right, isRight(), now);
     checkButton(&bs->center, isCenter(), now);

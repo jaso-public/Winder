@@ -149,6 +149,7 @@ typedef struct {
     float   carriageSpeed[WRAP_MAX_CELLS];   // steps/s for each cell
     int32_t expectDe[WRAP_MAX_CELLS];        // encoder counts expected while crossing each cell
     int32_t minDePerRev[2];                  // fewer counts per turn while dwelling = fiber problem
+    int     fiberShift;                      // fiber problem below expect/2^fiberShift in a cell
 } LayerPlan;
 
 // Summary of one modelUpdate(), for the display and the serial log.
@@ -179,9 +180,11 @@ void modelHoopReading(WrapModel *m, int end, int32_t dy, int32_t de);
 
 // ---- Called at every cell boundary while the carriage is moving: integer work only ----
 
-// Less than half the expected fiber came off the spool: broken or run-out tow.
+// Too little fiber came off the spool: broken or run-out tow.  Normally under
+// half of what is expected; on the measurement pass (diameter still a guess)
+// only under 1/8.
 static inline int fiberLow(const LayerPlan *p, int cell, int32_t de) {
-    return de < (p->expectDe[cell] >> 1);
+    return de < (p->expectDe[cell] >> p->fiberShift);
 }
 
 // Keep a reading only if it is close to what the plan expects (within 1/8 =

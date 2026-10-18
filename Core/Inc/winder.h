@@ -25,14 +25,14 @@
 #define TOO_CLOSE_TO_EVENT 3600
 
 // button debounce is 50ms or 180000 clock cycles
-#define DEBOUNCE  60000
+#define DEBOUNCE_MS 20      // ignore button changes within 20 ms of the last one
 
 #define RED    1
 #define YELLOW 2
 #define GREEN  3
 
 typedef struct {
-    uint16_t time;
+    uint32_t time;          // HAL_GetTick() of the last accepted change
     int count;
     int last;
     uint8_t  pressed;

@@ -159,7 +159,10 @@ static WrapStatus dwellUntil(int end, Mark arrived, int32_t leaveAt) {
     float revs = (float)dy / STEPS_PER_REVOLUTION;
 
     if (de < plan.minDePerRev[end] * revs) {
-        snprintf(faultDetail, sizeof(faultDetail), "dwell at %s end", end == END_RIGHT ? "right" : "left");
+        long need = (long)(plan.minDePerRev[end] * revs);
+        snprintf(faultDetail, sizeof(faultDetail), "%c dwell %ld<%ld", end == END_RIGHT ? 'R' : 'L', (long)de, need);
+        printf("[wrap] FIBER: dwell at %s end, %ld barrel steps, encoder %ld counts, needed %ld\r\n",
+               end == END_RIGHT ? "right" : "left", (long)dy, (long)de, need);
         return WRAP_FIBER_OUT;
     }
     modelHoopReading(&model, end, dy, de);
@@ -199,7 +202,10 @@ static WrapStatus runPass(int from, int to, Mark *arrived) {
 
         if (fiberLow(&plan, cell, de)) {
             if (++lowFiber >= FIBER_OUT_CELLS) {
-                snprintf(faultDetail, sizeof(faultDetail), "pass, cell %d", cell);
+                long need = (long)(plan.expectDe[cell] >> plan.fiberShift);
+                snprintf(faultDetail, sizeof(faultDetail), "cell %d %ld<%ld", cell, (long)de, need);
+                printf("[wrap] FIBER: pass, cell %d, %ld barrel steps, encoder %ld counts, needed %ld (expected %ld)\r\n",
+                       cell, (long)dy, (long)de, need, (long)plan.expectDe[cell]);
                 return WRAP_FIBER_OUT;
             }
         } else {
