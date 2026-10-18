@@ -291,7 +291,9 @@ int modelPlanLayer(const WrapModel *m, const WrapConfig *c, LayerPlan *p) {
 
     // The measurement is a single out-and-back at the normal helix angle.
     p->circuits  = (p->kind == LAYER_MEASURE) ? 1 : c->circuits;
-    p->gateShift = (p->kind == LAYER_MEASURE) ? 2 : 3;   // 25% vs the mandrel guess, then 12.5%
+    // The measurement pass keeps every reading: its expectation is only the
+    // mandrel guess, which may be far off.  Later layers keep readings within 12.5%.
+    p->gateShift = (p->kind == LAYER_MEASURE) ? 0 : 3;
     return end - first;
 }
 
@@ -382,6 +384,9 @@ void modelUpdate(WrapModel *m, const WrapConfig *c, const LayerPlan *p, ModelSta
         float before = m->est[i];
         float pred   = before + add;
         float var    = m->var[i] + (isEnd ? qEnd : qBody);
+        // The measurement pass is there to replace the configured guess, so the
+        // guess must not be able to reject it: make it (almost) uninformative.
+        if (p->kind == LAYER_MEASURE) var += 100.0f;
         float weight = weightOf[i];
         float z      = reading[i];
 

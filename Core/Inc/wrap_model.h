@@ -144,7 +144,7 @@ typedef struct {
     int     endCell;
     int     layersLeft;                      // K: full-length layers still to go
     int     circuits;                        // out-and-back passes in this layer
-    int     gateShift;                       // keep readings within expect/2^gateShift
+    int     gateShift;                       // keep readings within expect/2^gateShift (0 = keep all)
     float   barrelSpeed;                     // steps/s
     float   carriageSpeed[WRAP_MAX_CELLS];   // steps/s for each cell
     int32_t expectDe[WRAP_MAX_CELLS];        // encoder counts expected while crossing each cell
@@ -188,9 +188,9 @@ static inline int fiberLow(const LayerPlan *p, int cell, int32_t de) {
 }
 
 // Keep a reading only if it is close to what the plan expects (within 1/8 =
-// 12.5% normally, 1/4 on the measurement pass, whose expectation is only the
-// mandrel guess), so a slip or a jerk is dropped instead of spoiling the
-// cell's average.
+// 12.5%), so a slip or a jerk is dropped instead of spoiling the cell's
+// average.  gateShift 0 (the measurement pass, whose expectation is only the
+// mandrel guess) keeps every reading.
 static inline void modelOfferSample(WrapModel *m, const LayerPlan *p, int cell, int32_t dy, int32_t de) {
     if (p->gateShift) {
         int32_t expect = p->expectDe[cell];
