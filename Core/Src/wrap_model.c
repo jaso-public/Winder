@@ -35,7 +35,7 @@ void wrapDefaultConfig(WrapConfig *c) {
     c->lengthIn        = 12.000f;
     c->largeDiaIn      = 4.000f;
     c->smallDiaIn      = 3.250f;
-    c->mandrelDiaIn    = 3.000f;
+    c->mandrelDiaIn    = 1.250f;
     c->fullFinish      = 1;
 
     c->towWidthIn      = 0.250f;
@@ -62,7 +62,7 @@ const char *wrapCheckConfig(const WrapConfig *c) {
     if (c->rightEndIn < 0.0f)                                 return "Right end < home";
     if (c->lengthIn / c->cellIn > WRAP_MAX_CELLS)             return "Too many cells";
     if (c->smallDiaIn > c->largeDiaIn)                        return "Small dia > large";
-    if (c->mandrelDiaIn >= c->smallDiaIn)                     return "Mandrel >= small dia";
+    if (c->mandrelDiaIn >= c->largeDiaIn)                     return "Mandrel >= large dia";
     if (c->towWidthIn <= 0.0f || c->towThicknessIn <= 0.0f)   return "Bad tow size";
     if (c->circuits < 1 || c->circuits > WRAP_MAX_CIRCUITS)   return "Passes 1-12 only";
     if (c->dwellRevs < 0.5f)                                  return "Dwell < 0.5 rev";
@@ -328,8 +328,9 @@ static float cellReading(const WrapModel *m, const WrapConfig *c, const LayerPla
 }
 
 // Readings for every wound cell (z <= 0: none).  Then drop body readings that
-// disagree with their neighbours: the surface is smooth over an inch, so a lone
-// jump is a slip or a bad sample, not the barrel.  Returns how many were dropped.
+// disagree with their neighbours on BOTH sides.  A slip or bad sample stands
+// alone; a real step in the barrel (e.g. 1.25" -> 1.00") agrees with the cells
+// on its own side, so it is kept.  Returns how many were dropped.
 #define NEIGHBOURS  2                     // cells each side
 static int gatherReadings(const WrapModel *m, const WrapConfig *c, const LayerPlan *p,
                           float add, float *z, float *w) {
@@ -344,17 +345,21 @@ static int gatherReadings(const WrapModel *m, const WrapConfig *c, const LayerPl
     }
     for (int i = first + 1; i < end - 1; i++) {           // body cells only
         if (z[i] <= 0.0f) continue;
-        float nb[2 * NEIGHBOURS];
-        int   n = 0;
-        for (int j = i - NEIGHBOURS; j <= i + NEIGHBOURS; j++) {
-            if (j == i || j <= first || j >= end - 1 || z[j] <= 0.0f) continue;
-            nb[n++] = z[j];
+        int   agrees = 0, sides = 0;
+        for (int side = -1; side <= 1; side += 2) {           // right side, then left side
+            float sum = 0.0f;
+            int   n = 0;
+            for (int k = 1; k <= NEIGHBOURS; k++) {
+                int j = i + side * k;
+                if (j <= first || j >= end - 1 || z[j] <= 0.0f) continue;
+                sum += z[j];
+                n++;
+            }
+            if (n == 0) continue;
+            sides++;
+            if (fabsf(z[i] - sum / n) <= limit) agrees = 1;
         }
-        if (n < 2) continue;
-        for (int a = 1; a < n; a++)                         // tiny insertion sort
-            for (int b = a; b > 0 && nb[b - 1] > nb[b]; b--) { float t = nb[b]; nb[b] = nb[b - 1]; nb[b - 1] = t; }
-        float median = (n & 1) ? nb[n / 2] : 0.5f * (nb[n / 2 - 1] + nb[n / 2]);
-        if (fabsf(z[i] - median) > limit) { drop[i] = 1; dropped++; }
+        if (sides > 0 && !agrees) { drop[i] = 1; dropped++; }
     }
     for (int i = first; i < end; i++)
         if (drop[i]) z[i] = -1.0f;
@@ -472,4 +477,31 @@ void modelUpdate(WrapModel *m, const WrapConfig *c, const LayerPlan *p, ModelSta
         st->rejected   = rejected;
         st->layerAddIn = m->layerAddIn;
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Profile report
+// ---------------------------------------------------------------------------
+
+// The biggest change in diameter along the barrel, comparing the cells on
+// each side of every boundary, STEP_SIDE cells per side (so one noisy cell
+// does not count as a step).
+// Returns the boundary index (0 if none); *size > 0 means bigger on the right.
+#define STEP_SIDE 2
+int modelFindStep(const WrapModel *m, float *atIn, float *size) {
+    int   best = 0;
+    float bestJump = 0.0f;
+    for (int b = STEP_SIDE; b <= m->nCells - STEP_SIDE; b++) {
+        float right = 0.0f, left = 0.0f;
+        for (int k = 0; k < STEP_SIDE; k++) {
+            right += m->est[b - 1 - k];
+            left  += m->est[b + k];
+        }
+        float jump = (right - left) / STEP_SIDE;
+        if (fabsf(jump) > fabsf(bestJump)) { bestJump = jump; best = b; }
+    }
+    *atIn = best * m->cellIn;
+    *size = bestJump;
+    return best;
 }

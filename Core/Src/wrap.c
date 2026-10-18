@@ -310,6 +310,42 @@ static void logLayer(int layer, const ModelStats *st) {
            plan.layersLeft);
 }
 
+// After the measurement pass: report the profile it found -- serial gets every
+// cell, the LCD shows the biggest step for a couple of seconds.  We are dwelling
+// at the right end, so keep watching the safety inputs while the message shows.
+static WrapStatus showMeasurement(void) {
+    float at, size;
+    char  a[12], b[12], line[48];
+    int   step = modelFindStep(&model, &at, &size);
+
+    printf("[wrap] measured diameter, right to left, every %d.%03d in (thousandths):",
+           (int)model.cellIn, (int)(model.cellIn * 1000) % 1000);
+    for (int i = 0; i < model.nCells; i++) printf(" %d", (int)(model.est[i] * 1000.0f + 0.5f));
+    printf("\r\n");
+
+    fmtFixed(a, sizeof(a), size < 0 ? -size : size, 3);
+    fmtFixed(b, sizeof(b), at, 2);
+    printf("[wrap] biggest step: %s in at %s in from the right end (%s on the right)\r\n",
+           a, b, size >= 0 ? "bigger" : "smaller");
+
+    uiLine(0, "Measured profile");
+    if (step) snprintf(line, sizeof(line), "Step %s @ %sin", a, b);
+    else      snprintf(line, sizeof(line), "No step found");
+    uiLine(1, line);
+    fmtFixed(a, sizeof(a), model.est[0], 3);
+    fmtFixed(b, sizeof(b), model.est[model.nCells - 1], 3);
+    snprintf(line, sizeof(line), "R %s  L %s", a, b);
+    uiLine(2, line);
+    uiLine(3, "");
+
+    uint32_t until = HAL_GetTick() + 2000;
+    while ((int32_t)(HAL_GetTick() - until) < 0) {
+        WrapStatus s = pollSafety();
+        if (s) return s;
+    }
+    return WRAP_OK;
+}
+
 static WrapStatus windAllLayers(int *layerOut) {
     const int32_t tieSteps = (int32_t)(cfg.tieRevs  * STEPS_PER_REVOLUTION);
     const int32_t minDwell = (int32_t)(cfg.dwellRevs * STEPS_PER_REVOLUTION) + DWELL_SLACK;
@@ -331,6 +367,7 @@ static WrapStatus windAllLayers(int *layerOut) {
         ModelStats st;
         modelUpdate(&model, &cfg, &plan, &st);
         logLayer(layer, &st);
+        if (plan.kind == LAYER_MEASURE && (s = showMeasurement())) return s;
         int r = modelPlanLayer(&model, &cfg, &plan);
         if (r == PLAN_IMPOSSIBLE) {
             snprintf(faultDetail, sizeof(faultDetail), "Tow too wide/passes");

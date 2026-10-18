@@ -174,6 +174,11 @@ void modelClearSamples(WrapModel *m);
 // Fiber-centreline diameter implied by a helical cell reading, or -1 if unusable.
 float diameterFromReading(float cellIn, float dy, float de);
 
+// After the measurement: where the biggest step in diameter is (inches from the
+// right end of the wrap) and how big it is (> 0: bigger on the right).
+// Returns the boundary index, 0 if there is none.
+int modelFindStep(const WrapModel *m, float *atIn, float *size);
+
 // Record a dwell (pure hoop) reading at one end: dy barrel steps, de encoder counts.
 void modelHoopReading(WrapModel *m, int end, int32_t dy, int32_t de);
 
