@@ -26,13 +26,24 @@
  *    measures them during the dwell) and simply stops turning around on a
  *    cell once it has reached its diameter.
  *
- * Building the cone: measure, fill, finish
- * ----------------------------------------
- *  Each cell has a target diameter on a straight line from largeDiaIn (right)
- *  to smallDiaIn (left).  The wrap goes through three phases:
+ * The part: shoulder - valley - shoulder
+ * --------------------------------------
+ *  The barrel has a shoulder at each end whose diameter is the finished
+ *  diameter there.  The valley between them (which may itself be stepped)
+ *  is filled to a straight cone from the right shoulder to the left one.
  *
- *  1. MEASURE  one full-length out-and-back pass.  Its readings replace the
- *              mandrel guess with the real starting profile.
+ *     right shoulder          valley                     left shoulder
+ *     ──────────────┐                                ┌──────────────
+ *                   └──── filled to a cone ──────────┘
+ *     start here  ->->->  measure until it gets big again
+ *
+ * Phases
+ * ------
+ *  1. MEASURE  out from the right shoulder, cell by cell, until the diameter
+ *              steps up again (the left shoulder, found while moving by
+ *              StepDetector), then back.  modelUpdate() then finds the two
+ *              steps precisely, takes the shoulder diameters as the finished
+ *              diameters, and sets the region (the valley) and the cone.
  *  2. FILL     partial layers that build the taper early.  K = how many
  *              full-length layers still fit at the place with the least room
  *              (normally the small end).  Every cell is filled up to
@@ -40,8 +51,8 @@
  *              the cone shape, just K layers undersize.  A fill layer covers
  *              the first run of cells (from the right) still at least half a
  *              layer short of that.
- *  3. FULL     full-length layers, K of them, that bring the whole cone up to
- *              size together, so the outside layers are continuous end to end.
+ *  3. FULL     shoulder-to-shoulder layers, K of them, that bring the whole
+ *              cone up to size together, so the outside layers are continuous.
  *              If the shape drifts (a stretch of at least 1" falls a whole
  *              layer behind), a fill layer is slipped in before the next one.
  *
@@ -80,13 +91,12 @@
 
 // Everything the operator (or code) can configure for a wrap.  Lengths in inches.
 typedef struct {
-    // -- shape --
-    float rightEndIn;        // carriage distance from home to the right (large) end
-    float lengthIn;          // wrap length, right end to left end
-    float largeDiaIn;        // finished diameter at the right end
-    float smallDiaIn;        // finished diameter at the left end
-    float mandrelDiaIn;      // bare barrel diameter: starting guess, refined by measurement
-    int   fullFinish;        // 1 = fill the taper first, finish with full-length layers
+    // -- shape (the finished diameters are measured: the two shoulders) --
+    float rightEndIn;        // carriage start, on the right shoulder, measured from home
+    float maxLengthIn;       // measure at most this far left looking for the left shoulder
+    float mandrelDiaIn;      // valley diameter: only a first guess, the measurement replaces it
+    float stepMinIn;         // a diameter change at least this big is a shoulder
+    int   fullFinish;        // 1 = fill the taper first, finish with shoulder-to-shoulder layers
 
     // -- fiber --
     float towWidthIn;        // flat width of the tow as it lands
@@ -123,6 +133,12 @@ typedef struct {
     int   layersDone;                     // fill + full layers (not the measurement)
     int   measureDone;
     int   fullLayersDone;
+
+    // set by the measurement
+    int   measuredEnd;                    // cells actually measured (the pass stops at the left shoulder)
+    int   regionFirst, regionEnd;         // the valley: cells regionFirst .. regionEnd-1 are wound
+    float rightDiaIn, leftDiaIn;          // shoulder (= finished) diameters
+    int   regionStatus;                   // REGION_OK or why not
     uint8_t flags[WRAP_MAX_CELLS];        // CELL_RIDGE / CELL_REFERENCE
 
     // raw readings accumulated during the current layer (integer adds only)
@@ -132,6 +148,11 @@ typedef struct {
     float   hoopDia[2];                   // latest dwell reading at each end (<= 0: none)
     float   hoopRevs[2];                  // total dwell turns at each end this layer
 } WrapModel;
+
+#define REGION_OK             0
+#define REGION_NO_RIGHT_STEP  1   // never stepped down off the right shoulder
+#define REGION_NO_LEFT_STEP   2   // never stepped up onto a left shoulder
+#define REGION_TOO_SHORT      3
 
 #define LAYER_MEASURE 0   // first pass: read the starting profile
 #define LAYER_FILL    1   // partial layer: build the taper
@@ -174,10 +195,21 @@ void modelClearSamples(WrapModel *m);
 // Fiber-centreline diameter implied by a helical cell reading, or -1 if unusable.
 float diameterFromReading(float cellIn, float dy, float de);
 
-// After the measurement: where the biggest step in diameter is (inches from the
-// right end of the wrap) and how big it is (> 0: bigger on the right).
-// Returns the boundary index, 0 if there is none.
-int modelFindStep(const WrapModel *m, float *atIn, float *size);
+const char *regionStatusText(int status);              // short (<=20 char) text for the LCD
+
+// Finds the left shoulder while the measurement pass is moving, one cell at a
+// time: first it sees the right shoulder, then the diameter steps down into
+// the valley, then -- when it is big again for three cells in a row -- that is
+// the left shoulder and the pass can stop.  Cheap enough to run per cell.
+typedef struct {
+    int   state;            // 0 = right shoulder, 1 = valley, 2 = left shoulder found
+    float stepMin;
+    float sum;  int n;      // running average of the current section
+    int   up;               // cells in a row that are big again
+    int   leftStart;        // first cell of the left shoulder
+} StepDetector;
+void stepDetectorInit(StepDetector *d, float stepMin);
+int  stepDetectorFeed(StepDetector *d, int cell, float dia);   // 1 = left shoulder confirmed
 
 // Record a dwell (pure hoop) reading at one end: dy barrel steps, de encoder counts.
 void modelHoopReading(WrapModel *m, int end, int32_t dy, int32_t de);

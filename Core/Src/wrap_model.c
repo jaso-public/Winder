@@ -31,11 +31,10 @@
 // ---------------------------------------------------------------------------
 
 void wrapDefaultConfig(WrapConfig *c) {
-    c->rightEndIn      = 1.000f;
-    c->lengthIn        = 12.000f;
-    c->largeDiaIn      = 4.000f;
-    c->smallDiaIn      = 3.250f;
+    c->rightEndIn      = 0.000f;
+    c->maxLengthIn     = 17.000f;
     c->mandrelDiaIn    = 1.250f;
+    c->stepMinIn       = 0.100f;
     c->fullFinish      = 1;
 
     c->towWidthIn      = 0.250f;
@@ -58,11 +57,10 @@ void wrapDefaultConfig(WrapConfig *c) {
 }
 
 const char *wrapCheckConfig(const WrapConfig *c) {
-    if (c->lengthIn < 1.0f)                                   return "Length too short";
+    if (c->maxLengthIn < 2.0f)                                return "Max length too short";
     if (c->rightEndIn < 0.0f)                                 return "Right end < home";
-    if (c->lengthIn / c->cellIn > WRAP_MAX_CELLS)             return "Too many cells";
-    if (c->smallDiaIn > c->largeDiaIn)                        return "Small dia > large";
-    if (c->mandrelDiaIn >= c->largeDiaIn)                     return "Mandrel >= large dia";
+    if (c->maxLengthIn / c->cellIn > WRAP_MAX_CELLS)          return "Too many cells";
+    if (c->stepMinIn <= 0.0f)                                 return "Step min must be >0";
     if (c->towWidthIn <= 0.0f || c->towThicknessIn <= 0.0f)   return "Bad tow size";
     if (c->circuits < 1 || c->circuits > WRAP_MAX_CIRCUITS)   return "Passes 1-12 only";
     if (c->dwellRevs < 0.5f)                                  return "Dwell < 0.5 rev";
@@ -111,21 +109,24 @@ void modelHoopReading(WrapModel *m, int end, int32_t dy, int32_t de) {
 // ---------------------------------------------------------------------------
 
 int modelInit(WrapModel *m, const WrapConfig *c) {
-    int n = (int)(c->lengthIn / c->cellIn + 0.5f);
+    int n = (int)(c->maxLengthIn / c->cellIn + 0.5f);
     if (n < 2 || n > WRAP_MAX_CELLS) return 0;
 
     m->nCells            = n;
-    m->cellIn            = c->lengthIn / n;              // cells fit the length exactly
+    m->cellIn            = c->maxLengthIn / n;           // cells fit the length exactly
     m->nominalLayerAddIn = 4.0f * c->towThicknessIn;     // two plies, both sides of the diameter
     m->layerAddIn        = m->nominalLayerAddIn;
     m->layersDone        = 0;
     m->measureDone       = 0;
     m->fullLayersDone    = 0;
+    m->measuredEnd       = 0;
+    m->regionFirst = m->regionEnd = 0;
+    m->rightDiaIn  = m->leftDiaIn = 0.0f;
+    m->regionStatus      = REGION_OK;
     memset(m->flags, 0, sizeof(m->flags));
 
     for (int i = 0; i < n; i++) {
-        float f = (i + 0.5f) / n;                        // 0 at the right end, 1 at the left
-        m->target[i] = c->largeDiaIn + (c->smallDiaIn - c->largeDiaIn) * f;
+        m->target[i] = 0.0f;                             // set by the measurement
         m->est[i]    = c->mandrelDiaIn;
         m->var[i]    = c->initialSigmaIn * c->initialSigmaIn;
     }
@@ -154,19 +155,19 @@ void modelClearSamples(WrapModel *m) {
 static void markReferenceCells(WrapModel *m) {
     const int half = REF_WINDOW / 2;
     float best = 1e9f;
-    int   bestAt = m->nCells - 1;
+    int   bestAt = m->regionEnd - 1;
     for (int i = 0; i < m->nCells; i++) {
         float sum = 0.0f;
         int   n = 0;
         for (int j = i - half; j <= i + half; j++) {
-            if (j < 0 || j >= m->nCells || (m->flags[j] & CELL_RIDGE)) continue;
+            if (j < m->regionFirst || j >= m->regionEnd || (m->flags[j] & CELL_RIDGE)) continue;
             sum += m->target[j] - m->est[j];
             n++;
         }
         if (n >= 3 && sum / n < best) { best = sum / n; bestAt = i; }
     }
     for (int j = bestAt - half; j <= bestAt + half; j++)
-        if (j >= 0 && j < m->nCells) m->flags[j] |= CELL_REFERENCE;
+        if (j >= m->regionFirst && j < m->regionEnd) m->flags[j] |= CELL_REFERENCE;
 }
 
 // K: how many full-length layers still fit, from the average room left on the
@@ -233,8 +234,8 @@ static int chooseLayer(const WrapModel *m, const WrapConfig *c, LayerPlan *p) {
     }
     if (k >= 1) {
         p->kind = LAYER_FULL;
-        p->firstCell = 0;
-        p->endCell   = m->nCells;
+        p->firstCell = m->regionFirst;
+        p->endCell   = m->regionEnd;
         return 1;
     }
     return 0;
@@ -328,9 +329,10 @@ static float cellReading(const WrapModel *m, const WrapConfig *c, const LayerPla
 }
 
 // Readings for every wound cell (z <= 0: none).  Then drop body readings that
-// disagree with their neighbours on BOTH sides.  A slip or bad sample stands
-// alone; a real step in the barrel (e.g. 1.25" -> 1.00") agrees with the cells
-// on its own side, so it is kept.  Returns how many were dropped.
+// agree with NONE of their nearest neighbours (two each side).  A slip or bad
+// sample stands alone; a cell at a real step (a shoulder, or 1.25" -> 1.00")
+// still agrees with the cell next to it on its own side, so it is kept.
+// Returns how many were dropped.
 #define NEIGHBOURS  2                     // cells each side
 static int gatherReadings(const WrapModel *m, const WrapConfig *c, const LayerPlan *p,
                           float add, float *z, float *w) {
@@ -343,27 +345,155 @@ static int gatherReadings(const WrapModel *m, const WrapConfig *c, const LayerPl
         z[i] = cellReading(m, c, p, i, add, &w[i]);
         drop[i] = 0;
     }
+    // The measurement pass keeps everything: it is looking for real steps, and
+    // the step finder judges on two-cell averages and medians instead.
+    if (p->kind == LAYER_MEASURE) return 0;
     for (int i = first + 1; i < end - 1; i++) {           // body cells only
         if (z[i] <= 0.0f) continue;
-        int   agrees = 0, sides = 0;
-        for (int side = -1; side <= 1; side += 2) {           // right side, then left side
-            float sum = 0.0f;
-            int   n = 0;
-            for (int k = 1; k <= NEIGHBOURS; k++) {
-                int j = i + side * k;
-                if (j <= first || j >= end - 1 || z[j] <= 0.0f) continue;
-                sum += z[j];
-                n++;
-            }
-            if (n == 0) continue;
-            sides++;
-            if (fabsf(z[i] - sum / n) <= limit) agrees = 1;
+        int agrees = 0, others = 0;
+        for (int j = i - NEIGHBOURS; j <= i + NEIGHBOURS; j++) {
+            if (j == i || j <= first || j >= end - 1 || z[j] <= 0.0f) continue;
+            others++;
+            if (fabsf(z[i] - z[j]) <= limit) agrees = 1;
         }
-        if (sides > 0 && !agrees) { drop[i] = 1; dropped++; }
+        if (others > 0 && !agrees) { drop[i] = 1; dropped++; }
     }
     for (int i = first; i < end; i++)
         if (drop[i]) z[i] = -1.0f;
     return dropped;
+}
+
+// ---------------------------------------------------------------------------
+// After the measurement: the two shoulders, the valley between them, the cone
+// ---------------------------------------------------------------------------
+
+// Average estimate over cells [a, b) (clipped to what was measured).
+static float avgEst(const WrapModel *m, int a, int b) {
+    if (a < 0) a = 0;
+    if (b > m->measuredEnd) b = m->measuredEnd;
+    float sum = 0.0f;
+    for (int i = a; i < b; i++) sum += m->est[i];
+    return b > a ? sum / (b - a) : 0.0f;
+}
+
+// Median estimate over cells [a, b) (clipped to what was measured), at most
+// SHOULDER_CELLS of them: one slipped reading cannot move it.
+#define SHOULDER_CELLS 4
+static float medianEst(const WrapModel *m, int a, int b) {
+    float v[SHOULDER_CELLS];
+    int   n = 0;
+    if (a < 0) a = 0;
+    if (b > m->measuredEnd) b = m->measuredEnd;
+    for (int i = a; i < b && n < SHOULDER_CELLS; i++) {
+        float x = m->est[i];
+        int   k = n++;
+        while (k > 0 && v[k - 1] > x) { v[k] = v[k - 1]; k--; }   // insertion sort
+        v[k] = x;
+    }
+    if (n == 0) return 0.0f;
+    return (n & 1) ? v[n / 2] : 0.5f * (v[n / 2 - 1] + v[n / 2]);
+}
+
+// Steps are judged on two cells each side, so one noisy cell is not a shoulder.
+#define STEP_CELLS 2
+
+// The two-cell test spots a step but can place it a cell early; put it at the
+// boundary near b with the biggest single-cell change in the step's direction
+// (dir -1 = stepping down, +1 = stepping up).
+static int sharpestStep(const WrapModel *m, int b, int dir) {
+    int   best = b;
+    float bestJump = 0.0f;
+    for (int k = b - 1; k <= b + STEP_CELLS; k++) {
+        if (k < 1 || k >= m->measuredEnd) continue;
+        float jump = dir * (m->est[k] - m->est[k - 1]);
+        if (jump > bestJump) { bestJump = jump; best = k; }
+    }
+    return best;
+}
+static int findRegion(WrapModel *m, const WrapConfig *c) {
+    const int end = m->measuredEnd;
+    int right = 0, left = 0;
+
+    // Right: the first boundary where the diameter drops by stepMin or more
+    // (judged on two-cell averages), then placed exactly at the biggest
+    // single-cell drop nearby.
+    for (int b = 1; b + STEP_CELLS <= end; b++)
+        if (avgEst(m, b, b + STEP_CELLS) < avgEst(m, b - STEP_CELLS, b) - c->stepMinIn) { right = b; break; }
+    if (!right) return REGION_NO_RIGHT_STEP;
+    right = sharpestStep(m, right, -1);
+
+    // Left: the pass stopped once it had climbed onto the left shoulder, so
+    // search backward from the end -- the last boundary where it rises by
+    // stepMin or more.  A bump earlier in the valley is never reached.
+    for (int b = end - STEP_CELLS; b >= right + STEP_CELLS; b--)
+        if (avgEst(m, b, b + STEP_CELLS) > avgEst(m, b - STEP_CELLS, b) + c->stepMinIn) { left = b; break; }
+    if (!left) return REGION_NO_LEFT_STEP;
+    left = sharpestStep(m, left, +1);
+    if (left - right < 4) return REGION_TOO_SHORT;
+
+    m->regionFirst = right;
+    m->regionEnd   = left;
+    m->rightDiaIn  = medianEst(m, right - SHOULDER_CELLS, right);   // shoulder cells next to each step
+    m->leftDiaIn   = medianEst(m, left, left + SHOULDER_CELLS);
+
+    // The cone, on cell centres, from the right shoulder to the left one.
+    // Cells outside the valley are never wound: target = what is there.
+    for (int i = 0; i < m->nCells; i++) {
+        if (i >= right && i < left) {
+            float f = (i + 0.5f - right) / (left - right);
+            m->target[i] = m->rightDiaIn + (m->leftDiaIn - m->rightDiaIn) * f;
+        } else {
+            m->target[i] = m->est[i];
+        }
+    }
+    return REGION_OK;
+}
+
+const char *regionStatusText(int s) {
+    switch (s) {
+    case REGION_NO_RIGHT_STEP: return "No right shoulder";
+    case REGION_NO_LEFT_STEP:  return "No left shoulder";
+    case REGION_TOO_SHORT:     return "Valley too short";
+    default:                   return "OK";
+    }
+}
+
+#define DETECT_CELLS 3
+void stepDetectorInit(StepDetector *d, float stepMin) {
+    d->state = 0;
+    d->stepMin = stepMin;
+    d->sum = 0.0f;
+    d->n = 0;
+    d->up = 0;
+    d->leftStart = -1;
+}
+
+int stepDetectorFeed(StepDetector *d, int cell, float dia) {
+    if (dia <= 0.0f || d->state == 2) return d->state == 2;
+    float avg = d->n ? d->sum / d->n : dia;
+
+    if (d->state == 0) {                         // on the right shoulder
+        if (d->n && dia < avg - d->stepMin) {    // stepped down: into the valley
+            d->state = 1;
+            d->sum = dia;
+            d->n = 1;
+        } else {
+            d->sum += dia;
+            d->n++;
+        }
+        return 0;
+    }
+    // in the valley: big again for DETECT_CELLS in a row = the left shoulder
+    // (only once the valley average has a few cells behind it)
+    if (d->n >= DETECT_CELLS && dia > avg + d->stepMin) {
+        if (d->up++ == 0) d->leftStart = cell;
+        if (d->up >= DETECT_CELLS) { d->state = 2; return 1; }
+    } else {
+        d->up = 0;
+        d->sum += dia;                           // the valley may step down further: track it
+        d->n++;
+    }
+    return 0;
 }
 
 void modelUpdate(WrapModel *m, const WrapConfig *c, const LayerPlan *p, ModelStats *st) {
@@ -467,7 +597,12 @@ void modelUpdate(WrapModel *m, const WrapConfig *c, const LayerPlan *p, ModelSta
     if (first - 1 >= 0)  m->flags[first - 1] |= CELL_RIDGE;
     if (end < m->nCells) m->flags[end]       |= CELL_RIDGE;
 
-    if (p->kind == LAYER_MEASURE) { m->measureDone = 1; markReferenceCells(m); }
+    if (p->kind == LAYER_MEASURE) {
+        m->measureDone = 1;
+        m->measuredEnd = end;
+        m->regionStatus = findRegion(m, c);
+        if (m->regionStatus == REGION_OK) markReferenceCells(m);
+    }
     else                          m->layersDone++;
     if (p->kind == LAYER_FULL)    m->fullLayersDone++;
     modelClearSamples(m);
@@ -480,28 +615,3 @@ void modelUpdate(WrapModel *m, const WrapConfig *c, const LayerPlan *p, ModelSta
 }
 
 
-// ---------------------------------------------------------------------------
-// Profile report
-// ---------------------------------------------------------------------------
-
-// The biggest change in diameter along the barrel, comparing the cells on
-// each side of every boundary, STEP_SIDE cells per side (so one noisy cell
-// does not count as a step).
-// Returns the boundary index (0 if none); *size > 0 means bigger on the right.
-#define STEP_SIDE 2
-int modelFindStep(const WrapModel *m, float *atIn, float *size) {
-    int   best = 0;
-    float bestJump = 0.0f;
-    for (int b = STEP_SIDE; b <= m->nCells - STEP_SIDE; b++) {
-        float right = 0.0f, left = 0.0f;
-        for (int k = 0; k < STEP_SIDE; k++) {
-            right += m->est[b - 1 - k];
-            left  += m->est[b + k];
-        }
-        float jump = (right - left) / STEP_SIDE;
-        if (fabsf(jump) > fabsf(bestJump)) { bestJump = jump; best = b; }
-    }
-    *atIn = best * m->cellIn;
-    *size = bestJump;
-    return best;
-}

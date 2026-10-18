@@ -140,6 +140,26 @@ void changeSpeed(Stepper *s, float newSpeed) {
     __set_PRIMASK(primask_bit);
 }
 
+// Move the end point of a POSITION move that is already running.  Only in the
+// direction it is already going, and only if there is still room to stop
+// there.  Returns 1 if the new end point was taken, 0 if not.
+int changeTarget(Stepper *s, int32_t newPosition) {
+    int ok = 0;
+    uint32_t primask_bit = __get_PRIMASK();
+    __disable_irq();
+    if (s->mode == POSITION && !s->stopping) {
+        int32_t  remaining   = (newPosition - s->currentPosition) * s->stepIncrement;
+        uint32_t stepsToStop = (uint32_t)ceilf(s->speedSquared / s->acceleration2x);
+        if (remaining > 0 && (uint32_t)remaining > stepsToStop + 2) {
+            s->desiredPosition = newPosition;
+            ok = 1;
+        }
+    }
+    __DSB();
+    __set_PRIMASK(primask_bit);
+    return ok;
+}
+
 __attribute__((noinline)) int32_t getPosition(Stepper *s) {
     uint32_t primask_bit = __get_PRIMASK();
     __disable_irq();

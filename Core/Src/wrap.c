@@ -2,7 +2,8 @@
  * wrap.c
  *
  * wrap(): wind carbon tow onto the barrel, layer by layer, until the outside
- * is a cone from largeDiaIn (right end) to smallDiaIn (left end).
+ * fills the valley between the barrel's two shoulders to a cone that runs from
+ * the right shoulder's diameter to the left shoulder's (both are measured).
  *
  * Call tree
  * ---------
@@ -183,7 +184,10 @@ static WrapStatus dwellUntil(int end, Mark arrived, int32_t leaveAt) {
 // Traverse from boundary `from` to boundary `to`.  At every cell boundary:
 // read the barrel and encoder, check fiber is paying out, keep the reading if
 // the carriage was at full speed across the cell, and set the next cell's speed.
-static WrapStatus runPass(int from, int to, Mark *arrived) {
+// With a StepDetector (measurement pass, outbound) it also watches for the left
+// shoulder and, once found, ends the pass one cell later.  passEnd = where it stopped.
+static int passEnd;
+static WrapStatus runPass(int from, int to, Mark *arrived, StepDetector *det) {
     const int step   = (to > from) ? 1 : -1;            // +1 = outbound, toward the left end
     const int posDir = step * LEFT_DIR;                 // carriage step direction
     int  cell        = (step > 0) ? from : from - 1;
@@ -221,6 +225,13 @@ static WrapStatus runPass(int from, int to, Mark *arrived) {
 
         last       = now;
         wasAtSpeed = atSpeed;
+
+        // Measurement: on the left shoulder?  Then stop one cell further on.
+        if (det && step > 0 && to > b + 1 &&
+            stepDetectorFeed(det, cell, diameterFromReading(model.cellIn, dy, de))) {
+            for (int stopAt = b + 1; stopAt < to; stopAt++)
+                if (changeTarget(&carriageStepper, boundaryPos(stopAt))) { to = stopAt; break; }
+        }
         if (b == to) break;
 
         cell += step;
@@ -229,6 +240,7 @@ static WrapStatus runPass(int from, int to, Mark *arrived) {
 
     WrapStatus s = waitCarriageStopped();               // it stops exactly on the end boundary
     *arrived = markNow();
+    passEnd  = to;
     return s;
 }
 
@@ -270,7 +282,11 @@ static WrapStatus windLayer(int layer, Mark *at, int32_t firstDwell) {
         if ((s = dwellUntil(END_RIGHT, arrived, start))) return s;
 
         // ---- outbound: right end -> left end ----
-        if ((s = runPass(plan.firstCell, plan.endCell, &arrived))) return s;
+        StepDetector det;
+        int measuring = (plan.kind == LAYER_MEASURE);
+        if (measuring) stepDetectorInit(&det, cfg.stepMinIn);
+        if ((s = runPass(plan.firstCell, plan.endCell, &arrived, measuring ? &det : 0))) return s;
+        if (measuring) plan.endCell = passEnd;          // it stopped at the left shoulder
         if (k == 0) outSteps = stepsBetween(start, arrived.barrel);
 
         // ---- left end: leave a fixed time after this circuit started ----
@@ -278,7 +294,7 @@ static WrapStatus windLayer(int layer, Mark *at, int32_t firstDwell) {
         if ((s = dwellUntil(END_LEFT, arrived, back))) return s;
 
         // ---- return: left end -> right end ----
-        if ((s = runPass(plan.endCell, plan.firstCell, &arrived))) return s;
+        if ((s = runPass(plan.endCell, plan.firstCell, &arrived, 0))) return s;
 
         if (k == 0 && n > 1) {
             int32_t backSteps = stepsBetween(back, arrived.barrel);
@@ -302,41 +318,43 @@ static void logLayer(int layer, const ModelStats *st) {
     static const char *kind[] = { "measure", "fill", "full" };
     char add[10], r[10], l[10], rps[10];
     fmtFixed(add, sizeof(add), st->layerAddIn, 4);
-    fmtFixed(r,   sizeof(r),   model.est[0], 3);
-    fmtFixed(l,   sizeof(l),   model.est[model.nCells - 1], 3);
+    fmtFixed(r,   sizeof(r),   model.est[plan.firstCell], 3);
+    fmtFixed(l,   sizeof(l),   model.est[plan.endCell - 1], 3);
     fmtFixed(rps, sizeof(rps), plan.barrelSpeed / STEPS_PER_REVOLUTION, 2);
     printf("[wrap] layer %d (%s) done: cells %d-%d rps %s  measured %d rejected %d  growth/layer %s  dia R %s L %s  full layers left %d\r\n",
            layer, kind[plan.kind], plan.firstCell, plan.endCell - 1, rps, st->measured, st->rejected, add, r, l,
            plan.layersLeft);
 }
 
-// After the measurement pass: report the profile it found -- serial gets every
-// cell, the LCD shows the biggest step for a couple of seconds.  We are dwelling
-// at the right end, so keep watching the safety inputs while the message shows.
+// After the measurement pass: report what it found -- serial gets every cell,
+// the LCD shows the two shoulders and the valley for a couple of seconds.  We
+// are dwelling at the right end, so keep watching the safety inputs meanwhile.
 static WrapStatus showMeasurement(void) {
-    float at, size;
-    char  a[12], b[12], line[48];
-    int   step = modelFindStep(&model, &at, &size);
+    char a[12], b[12], line[48];
 
-    printf("[wrap] measured diameter, right to left, every %d.%03d in (thousandths):",
-           (int)model.cellIn, (int)(model.cellIn * 1000) % 1000);
-    for (int i = 0; i < model.nCells; i++) printf(" %d", (int)(model.est[i] * 1000.0f + 0.5f));
+    printf("[wrap] measured diameter, right to left, per %ld/1000 in cell (thousandths):",
+           (long)(model.cellIn * 1000.0f + 0.5f));
+    for (int i = 0; i < model.measuredEnd; i++) printf(" %d", (int)(model.est[i] * 1000.0f + 0.5f));
     printf("\r\n");
 
-    fmtFixed(a, sizeof(a), size < 0 ? -size : size, 3);
-    fmtFixed(b, sizeof(b), at, 2);
-    printf("[wrap] biggest step: %s in at %s in from the right end (%s on the right)\r\n",
-           a, b, size >= 0 ? "bigger" : "smaller");
+    if (model.regionStatus != REGION_OK) {
+        printf("[wrap] %s\r\n", regionStatusText(model.regionStatus));
+        snprintf(faultDetail, sizeof(faultDetail), "%s", regionStatusText(model.regionStatus));
+        return WRAP_CONFIG_ERROR;
+    }
 
-    uiLine(0, "Measured profile");
-    if (step) snprintf(line, sizeof(line), "Step %s @ %sin", a, b);
-    else      snprintf(line, sizeof(line), "No step found");
+    uiLine(0, "Measured:");
+    fmtFixed(a, sizeof(a), model.rightDiaIn, 3);
+    fmtFixed(b, sizeof(b), model.regionFirst * model.cellIn, 2);
+    snprintf(line, sizeof(line), "R %s at %s", a, b);
     uiLine(1, line);
-    fmtFixed(a, sizeof(a), model.est[0], 3);
-    fmtFixed(b, sizeof(b), model.est[model.nCells - 1], 3);
-    snprintf(line, sizeof(line), "R %s  L %s", a, b);
+    printf("[wrap] right shoulder %s in, steps down at %s in", a, b);
+    fmtFixed(a, sizeof(a), model.leftDiaIn, 3);
+    fmtFixed(b, sizeof(b), model.regionEnd * model.cellIn, 2);
+    snprintf(line, sizeof(line), "L %s at %s", a, b);
     uiLine(2, line);
-    uiLine(3, "");
+    printf("; left shoulder %s in, steps up at %s in (from the right end)\r\n", a, b);
+    uiLine(3, "Filling the valley");
 
     uint32_t until = HAL_GetTick() + 2000;
     while ((int32_t)(HAL_GetTick() - until) < 0) {
@@ -405,7 +423,7 @@ static const char *checkSettings(void) {
 
     int32_t maxPos = (int32_t)(CARRIAGE_MAX_TRAVEL_IN * STEPS_PER_INCH);
     int32_t right  = (int32_t)(cfg.rightEndIn * STEPS_PER_INCH);
-    int32_t left   = right + LEFT_DIR * (int32_t)(cfg.lengthIn * STEPS_PER_INCH);
+    int32_t left   = right + LEFT_DIR * (int32_t)(cfg.maxLengthIn * STEPS_PER_INCH);
     if (right < 0 || left < 0 || right > maxPos || left > maxPos) return "Past carriage travel";
     return 0;
 }

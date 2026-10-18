@@ -89,6 +89,7 @@ void stepperStart(Stepper *s, float desiredSpeed, int direction);
 void stop(Stepper *s);
 void waitUntilStopped(Stepper *s);
 void changeSpeed(Stepper *s, float newSpeed);
+int  changeTarget(Stepper *s, int32_t newPosition);   // 1 = done (same direction, room to stop)
 
 int32_t getPosition(Stepper *s);
 

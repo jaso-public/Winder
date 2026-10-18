@@ -152,11 +152,10 @@ static void editorDraw(const EditItem *items, int count, int current, int top) {
 int uiEditConfig(WrapConfig *cfg) {
     WrapConfig w = *cfg;                         // edit a copy; keep it only on C
     const EditItem items[] = {
-        { "Length in",   &w.lengthIn,       0, 0.125f, 1.0f,  CARRIAGE_MAX_TRAVEL_IN, 3 },
         { "Right end",   &w.rightEndIn,     0, 0.125f, 0.0f,  CARRIAGE_MAX_TRAVEL_IN, 3 },
-        { "Large dia",   &w.largeDiaIn,     0, 0.010f, 0.5f,  12.0f, 3 },
-        { "Small dia",   &w.smallDiaIn,     0, 0.010f, 0.5f,  12.0f, 3 },
-        { "Mandrel dia", &w.mandrelDiaIn,   0, 0.010f, 0.5f,  12.0f, 3 },
+        { "Max length",  &w.maxLengthIn,    0, 0.250f, 2.0f,  CARRIAGE_MAX_TRAVEL_IN, 2 },
+        { "Valley dia",  &w.mandrelDiaIn,   0, 0.010f, 0.5f,  12.0f, 3 },
+        { "Step min",    &w.stepMinIn,      0, 0.010f, 0.02f, 1.0f,  2 },
         { "Tow width",   &w.towWidthIn,     0, 0.005f, 0.02f, 1.0f,  3 },
         { "Tow thick",   &w.towThicknessIn, 0, 0.001f, 0.001f,0.1f,  3 },
         { "Passes/lyr",  0, &w.circuits,       1,      1,     WRAP_MAX_CIRCUITS, 0 },
@@ -224,6 +223,9 @@ void uiShowLayer(int layer, const WrapModel *m, const LayerPlan *p) {
 
     if (p->kind == LAYER_MEASURE) {
         uiLine(1, "Measuring profile");
+        uiLine(2, "Finding shoulders");
+        uiLine(3, "");
+        return;
     } else if (p->kind == LAYER_FULL) {
         snprintf(line, sizeof(line), "Full length, %d left", p->layersLeft);
         uiLine(1, line);
@@ -234,13 +236,13 @@ void uiShowLayer(int layer, const WrapModel *m, const LayerPlan *p) {
         uiLine(1, line);
     }
 
-    fmtFixed(a, sizeof(a), m->est[0], 3);
-    fmtFixed(b, sizeof(b), m->target[0], 3);
+    fmtFixed(a, sizeof(a), m->est[m->regionFirst], 3);
+    fmtFixed(b, sizeof(b), m->target[m->regionFirst], 3);
     snprintf(line, sizeof(line), "Right %s>%s", a, b);
     uiLine(2, line);
 
-    fmtFixed(a, sizeof(a), m->est[m->nCells - 1], 3);
-    fmtFixed(b, sizeof(b), m->target[m->nCells - 1], 3);
+    fmtFixed(a, sizeof(a), m->est[m->regionEnd - 1], 3);
+    fmtFixed(b, sizeof(b), m->target[m->regionEnd - 1], 3);
     snprintf(line, sizeof(line), "Left  %s>%s", a, b);
     uiLine(3, line);
 }
