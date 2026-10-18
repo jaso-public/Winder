@@ -16,7 +16,7 @@
 
 
 // ----- timing/constants -----
-#define TIMER_CLOCK_HZ   36000000.0   // TIM2 @ 36 MHz
+#define TIMER_CLOCK_HZ   36000000.0f  // timer clock; float, so the step ISR stays in single precision
 #define MIN_BOOT_SPEED   1.0f         // steps/s
 #define VELOCITY_EPS     1e-6f
 

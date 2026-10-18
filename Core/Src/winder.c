@@ -29,156 +29,22 @@ extern Stepper barrelStepper;
 extern Stepper carriageStepper;
 
 
-#define CELLS 128
-
-#define DEBOUNCE_DELAY 20
-
-// diameter denoising: accept latest reading if within these thresholds
-#define OUTLIER_TEMPORAL_THRESHOLD 0.05f   // inches — max deviation from avg of last two
-#define OUTLIER_SPATIAL_THRESHOLD  0.05f   // inches — max deviation from neighbor average
-
 extern ButtonState bs;
 
 int carriageLocationKnown = 0;
-int profileCells = 0;
-
-static float diamHistory[3][CELLS];
-static int   diamHistoryCount = 0;
-float        profileDiameters[CELLS];
 
 
-// the y component of the motion (this is the amount of curved length around the barrel)
-float yDis(float eCnt, float xCnt) {
-    float h = eCnt / COUNT_PER_INCH;
-    float a = xCnt / STEPS_PER_INCH;
-    return sqrt(h*h - a*a);
-}
 
-float circumference(float yCnt, float yDis) {
-    return yDis * STEPS_PER_REVOLUTION / yCnt;
-}
 
-float diameter(float circumference) {
-    return circumference / 3.14159268;
-}
 int isLeft() {
 	return HAL_GPIO_ReadPin(ButtonLeft_GPIO_Port, ButtonLeft_Pin) == 0;
 }
 
 
-int x[CELLS];
-int y[CELLS];
-int e[CELLS];
 
 
-void waitAndRecord(int cell) {
-
-    if(carriageStepper.stepIncrement > 0) {
-        printf("waiting while pos:%ld is less than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
-        while(getPosition(&carriageStepper) < x[cell]);
-    } else {
-        printf("waiting while pos:%ld is greater than x:%d (cell=%d)\r\n", getPosition(&carriageStepper), x[cell], cell);
-        while(getPosition(&carriageStepper) > x[cell]);
-    }
-
-    y[cell] = barrelStepper.currentPosition;
-    e[cell] = readEncoderValue();
-
-    printf("pos:%ld  x:%d y:%d e:%d\r\n", getPosition(&carriageStepper), x[cell], y[cell], e[cell]);
-}
-
-// Measure the barrel diameter profile between startPos and endPos (in steps).
-// Both motors run simultaneously: barrel at barrelSpeed, carriage at carriageSpeed.
-// Samples CELLS-1 evenly-spaced cells, then holds at endPos for one full barrel
-// revolution before returning both motors to their starting positions.
-void measureProfile(int32_t startPos, int32_t endPos, float barrelSpeed, float carriageSpeed) {
-    if (!carriageLocationKnown) return;
-
-    int cells = CELLS - 1;
-    profileCells = cells;
-
-    for (int i = 0; i <= cells; i++)
-        x[i] = startPos + (int32_t)((endPos - startPos) * i / cells);
-
-    barrelStepper.currentPosition = 0;
-    stepperStart(&barrelStepper, barrelSpeed, CW);
-
-    moveToPosition(&carriageStepper, carriageSpeed, endPos);
-    for (int i = 0; i <= cells; i++) waitAndRecord(i);
-
-    // one full rotation at the end to capture circumference there
-    moveToPosition(&barrelStepper, barrelSpeed, STEPS_PER_REVOLUTION);
-    waitUntilStopped(&barrelStepper);
-
-    // return to starting positions
-    moveToPosition(&carriageStepper, carriageSpeed, startPos);
-    moveToPosition(&barrelStepper,   barrelSpeed,   0);
-    waitUntilStopped(&carriageStepper);
-    waitUntilStopped(&barrelStepper);
-
-    for (int i = 0; i <= cells; i++)
-        printf("%d: x:%d y:%d e:%d\r\n", i, x[i], y[i], e[i]);
-}
-
-void profile1() {
-
-    if(! carriageLocationKnown) {
-        lcd_clear();
-        lcd_write_string("Barrel Profile 1");
-        lcd_set_cursor(0, 1);
-        lcd_write_string("Winder Pos Unknown");
-        lcd_set_cursor(0, 2);
-        lcd_write_string("Home the carriage");
-        lcd_set_cursor(0, 3);
-        lcd_write_string("Press 'C' to continue");
-
-        while(1) {
-            updateButtonState(&bs);
-            if(newPress(&bs.left)) return;
-        }
-    }
-
-    float start =  0.450;
-//  float end =   17.625;
-    float end =    5.0;
-
-    float delta = end-start;
-
-    int cells = delta * 4;
-    profileCells = cells;
-    float width = delta / cells;
-
-    for(int i=0 ; i<cells ; i++) {
-        x[i] = (start + (i * width)) * STEPS_PER_INCH;
-    }
-    x[cells] = end * STEPS_PER_INCH;
-
-    // for(int i=0 ; i<=cells ; i++) printf("%d: %d  delta:%d\n", i, x[i], (x[i+1]-x[i]));
 
 
-    // start the barrel rotating
-    barrelStepper.currentPosition = 0;
-    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/4, CW);
-
-    // make the first pass measurements
-    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, x[cells]);
-    for(int i=0 ; i<=cells ; i++) waitAndRecord(i);
-
-    stop(&barrelStepper);
-    waitUntilStopped(&barrelStepper);
-
-    printStepperInfo(&barrelStepper);
-    printStepperInfo(&carriageStepper);
-
-    for(int i=0 ; i<=cells ; i++) printf("%d: x:%d(%d) y:%d(%d) e:%d(%d)\r\n", i, x[i], (x[i+1]-x[i]), y[i], (y[i+1]-y[i]), e[i], (e[i+1]-e[i]));
-
-    printf("unwinding\r\n");
-    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, 0);
-    moveToPosition(&barrelStepper, STEPS_PER_REVOLUTION/4, 0);
-
-    waitUntilStopped(&carriageStepper);
-    waitUntilStopped(&barrelStepper);
- }
 
 
 
@@ -432,13 +298,13 @@ void moveStepper(Stepper* s) {
         }
 
         if(newPress(&bs.top)) {
-             changeSpeed(s, s->desiredSpeed * 1.1);
+             changeSpeed(s, s->desiredSpeed * 1.1f);
              printf("top %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
              showDisplay(s, left);
         }
 
         if(newPress(&bs.bottom)) {
-            changeSpeed(s, s->desiredSpeed / 1.1);
+            changeSpeed(s, s->desiredSpeed / 1.1f);
             printf("bottom %ld %ld\r\n", (long)s->desiredSpeed, (long)s->currentSpeed);
             showDisplay(s, left);
         }
@@ -599,251 +465,13 @@ void calibrateBarrel() {
     }
 }
 
-void doBoth() {
-    char buffer[20];
-
-    lcd_clear();
-    lcd_set_cursor(0, 0);
-    snprintf(buffer, sizeof(buffer), "Start: %ld", carriageStepper.currentPosition);
-    lcd_write_string(buffer);
-
-
-    uint32_t distance = STEPS_PER_INCH * 17.5;
-
-    moveToPosition(&carriageStepper, STEPS_PER_INCH/2, carriageStepper.currentPosition + distance);
-    stepperStart(&barrelStepper, STEPS_PER_REVOLUTION/4, CW);
-
-
-    int32_t step = STEPS_PER_INCH/4;
-    int32_t next = carriageStepper.currentPosition + step;
-
-    int32_t c=0, b=0, e=0;
-    int32_t co=0, bo=0, eo=0;
-
-    do {
-        do {
-            c = carriageStepper.currentPosition;
-            if(isCenter()) break;
-        } while( c<next);
-
-        next += step;
-
-        b = barrelStepper.currentPosition;
-        e = readEncoderValue();
-
-        lcd_set_cursor(0, 0);
-        snprintf(buffer, sizeof(buffer), "Encoder:  %ld   ", e);
-        lcd_write_string(buffer);
-
-        lcd_set_cursor(0, 2);
-        snprintf(buffer, sizeof(buffer), "Barrel:   %ld   ", b);
-        lcd_write_string(buffer);
-
-        lcd_set_cursor(0, 1);
-        snprintf(buffer, sizeof(buffer), "Carriage: %ld   ", c);
-        lcd_write_string(buffer);
-
-        float yd= yDis((e-eo), (c-co));
-        float circum = circumference((b-bo), yd);
-
-        lcd_set_cursor(0, 3);
-        char circumText[12];
-        fmtFixed(circumText, sizeof(circumText), circum, 3);
-        snprintf(buffer, sizeof(buffer), "Circum: %-11s", circumText);   // 8 + 11 = 19 chars + NUL
-        lcd_write_string(buffer);
-
-
-        printf("%ld(%ld) %ld(%ld) %ld(%ld) circum:%s\r\n", c,(c-co), b, (b-bo), e, (e-eo), circumText);
-        co=c; bo=b; eo = e;
-
-        // break out of the loop to stop early
-        if(isCenter()) break;
-
-    } while(carriageStepper.desiredPosition != c);
-
-    stop(&barrelStepper);
-    stop(&carriageStepper);
-    printf("told the steppers to stop\r\n");
-    waitUntilStopped(&barrelStepper);
-    waitUntilStopped(&carriageStepper);
-
-    printStepperInfo(&barrelStepper);
-    printStepperInfo(&carriageStepper);
-
-    // wait to return to main menu
-    lcd_set_cursor(0, 3);
-    lcd_write_string("'C' to exit");
-
-    while(1) {
-        updateButtonState(&bs);
-        if(newPress(&bs.center)) break;
-    }
-
-}
 
 
 
-// Compute per-cell diameters from raw profile data, apply temporal and spatial outlier
-// rejection, and store the result in profileDiameters[].  Call after measureProfile().
-void updateDiameterProfile() {
-    int n = profileCells;
-    float raw[CELLS];
 
-    for (int i = 0; i < n; i++) {
-        float de = fabsf((float)(e[i+1] - e[i]));
-        float dx = fabsf((float)(x[i+1] - x[i]));
-        float dy = fabsf((float)(y[i+1] - y[i]));
-        raw[i] = (dy >= 1.0f) ? diameter(circumference(dy, yDis(de, dx))) : 0.0f;
-    }
 
-    // temporal: if latest deviates too far from avg of the previous two, use that avg instead
-    float filtered[CELLS];
-    for (int i = 0; i < n; i++) {
-        if (diamHistoryCount >= 2) {
-            float prev1 = diamHistory[(diamHistoryCount - 1) % 3][i];
-            float prev2 = diamHistory[(diamHistoryCount - 2) % 3][i];
-            float ref   = (prev1 + prev2) * 0.5f;
-            filtered[i] = fabsf(raw[i] - ref) > OUTLIER_TEMPORAL_THRESHOLD ? ref : raw[i];
-        } else {
-            filtered[i] = raw[i];
-        }
-    }
 
-    // spatial: if a cell deviates too far from its neighbors, replace with neighbor average
-    for (int i = 1; i < n - 1; i++) {
-        float neighborAvg = (filtered[i-1] + filtered[i+1]) * 0.5f;
-        if (fabsf(filtered[i] - neighborAvg) > OUTLIER_SPATIAL_THRESHOLD)
-            filtered[i] = neighborAvg;
-    }
 
-    for (int i = 0; i < n; i++) {
-        diamHistory[diamHistoryCount % 3][i] = filtered[i];
-        profileDiameters[i] = filtered[i];
-    }
-    diamHistoryCount++;
-}
-
-// Returns the total number of passes (both directions combined) needed to fully cover the
-// barrel at the given winding angle without gaps, using the thinnest point in the offset range.
-int computePasses(float windingAngleDeg, float towWidth, int32_t startOffset, int32_t endOffset) {
-    if (profileCells == 0) return 0;
-
-    int32_t startPos = x[0]            + startOffset;
-    int32_t endPos   = x[profileCells] - endOffset;
-
-    float minDiam = -1.0f;
-    for (int i = 0; i < profileCells; i++) {
-        if (x[i] < startPos || x[i+1] > endPos) continue;
-        if (minDiam < 0.0f || profileDiameters[i] < minDiam) minDiam = profileDiameters[i];
-    }
-
-    if (minDiam <= 0.0f) return 0;
-    float sinA = sinf(windingAngleDeg * 3.14159265f / 180.0f);
-    return (int)ceilf(minDiam * 3.14159265f * sinA / towWidth);
-}
-
-static float carriageSpeedForSegment(int from, int to, int totalPasses, float towWidth, float barrelSpeed);
-
-// Move the carriage to toPos, updating speed at each cell boundary to maintain the correct
-// winding angle.  Direction is inferred from the carriage's current position.  Assumes the
-// barrel is already spinning.  Returns when the carriage has stopped at toPos.
-void single_pass(int32_t toPos, int totalPasses, float towWidth, float barrelSpeed) {
-    int n = profileCells;
-    int forward = (toPos > carriageStepper.currentPosition);
-
-    if (forward) {
-        moveToPosition(&carriageStepper,
-                       carriageSpeedForSegment(0, 1, totalPasses, towWidth, barrelSpeed),
-                       toPos);
-        for (int i = 1; i < n; i++) {
-            if (x[i] >= toPos) break;
-            while (getPosition(&carriageStepper) < x[i]);
-            changeSpeed(&carriageStepper,
-                        carriageSpeedForSegment(i, i + 1, totalPasses, towWidth, barrelSpeed));
-        }
-    } else {
-        moveToPosition(&carriageStepper,
-                       carriageSpeedForSegment(n, n - 1, totalPasses, towWidth, barrelSpeed),
-                       toPos);
-        for (int i = n - 1; i > 0; i--) {
-            if (x[i] <= toPos) break;
-            while (getPosition(&carriageStepper) > x[i]);
-            changeSpeed(&carriageStepper,
-                        carriageSpeedForSegment(i, i - 1, totalPasses, towWidth, barrelSpeed));
-        }
-    }
-
-    waitUntilStopped(&carriageStepper);
-}
-
-// Carriage speed (steps/sec) for a profile segment, read from the filtered diameter array.
-// seg = min(from, to) is the cell index; both directions map to the same segment diameter.
-static float carriageSpeedForSegment(int from, int to, int totalPasses, float towWidth, float barrelSpeed) {
-    int   seg  = from < to ? from : to;
-    float diam = profileDiameters[seg];
-    if (diam <= 0.0f) return 100.0f;
-    float circ = diam * 3.14159265f;
-    float sinA = (totalPasses * towWidth) / circ;
-    if (sinA >= 1.0f) sinA = 0.999f;
-    float tanA = sinA / sqrtf(1.0f - sinA * sinA);
-    return (circ / tanA) * (barrelSpeed / STEPS_PER_REVOLUTION) * STEPS_PER_INCH;
-}
-
-// Wait until the barrel reaches the next unused slot at this end of the barrel.
-// Slots are totalSlots evenly-spaced angular positions (stride steps apart) anchored at
-// barrelRef.  We pick the lowest-numbered unused slot whose barrel position is at least
-// minTurn steps away, then spin until the barrel gets there.
-static void waitForSlot(int *slotUsed, int totalSlots, int32_t barrelRef,
-                        int32_t stride, int32_t minTurn) {
-    int32_t earliest = barrelStepper.currentPosition + minTurn;
-    // first slot index k such that barrelRef + k*stride >= earliest
-    int32_t offset = earliest - barrelRef;
-    int32_t k = (offset + stride - 1) / stride;
-    while (1) {
-        int idx = (int)(k % totalSlots);
-        if (!slotUsed[idx]) {
-            slotUsed[idx] = 1;
-            int32_t target = barrelRef + k * stride;
-            while (barrelStepper.currentPosition < target);
-            return;
-        }
-        k++;
-    }
-}
-
-// Wind one layer (passesPerDir passes in each direction) over the barrel.
-// towWidth:     fiber tow width in inches
-// passesPerDir: passes per direction (e.g. 5 → 10 total strips)
-// barrelSpeed:  barrel stepper speed in steps/sec
-// startOffset:  steps added to x[0] for the near-end winding position
-// endOffset:    steps subtracted from x[n] for the far-end winding position
-void layer(float towWidth, int passesPerDir, float barrelSpeed, int32_t startOffset, int32_t endOffset) {
-    if (!carriageLocationKnown || profileCells == 0) return;
-
-    int     totalPasses = 2 * passesPerDir;
-    int32_t startPos    = x[0] + startOffset;
-    int32_t endPos      = x[profileCells] - endOffset;
-    int32_t stride      = STEPS_PER_REVOLUTION / totalPasses;
-    int32_t minTurn     = (int32_t)(STEPS_PER_REVOLUTION * 3 / 4);
-    int32_t barrelRef   = barrelStepper.currentPosition;
-
-    // one slot-used array per end; totalPasses slots evenly cover one full revolution
-    int highSlotUsed[totalPasses];
-    int lowSlotUsed[totalPasses];
-    memset(highSlotUsed, 0, totalPasses * sizeof(int));
-    memset(lowSlotUsed,  0, totalPasses * sizeof(int));
-
-    
-    for (int pass = 0; pass < passesPerDir; pass++) {
-        printf("layer pass %d/%d fwd\r\n", pass + 1, passesPerDir);
-        single_pass(endPos,   totalPasses, towWidth, barrelSpeed);
-        waitForSlot(highSlotUsed, totalPasses, barrelRef, stride, minTurn);
-
-        printf("layer pass %d/%d rev\r\n", pass + 1, passesPerDir);
-        single_pass(startPos, totalPasses, towWidth, barrelSpeed);
-        waitForSlot(lowSlotUsed,  totalPasses, barrelRef, stride, minTurn);
-    }
-}
 
 void display_menu(char* prompt, char** options, int count, int current, int start) {
 
@@ -907,8 +535,6 @@ int main_menu(char* date, char* time) {
     char* selections[] = {
             "Wrap",
             "Home Carriage",
-            "Profile 1",
-            "Profile 2",
             "Move Carriage",
             "Move Barrel",
             "Read Encoder",
@@ -954,7 +580,6 @@ int main_menu(char* date, char* time) {
 
             if(strcmp(selections[current], "Wrap") == 0) wrap();
             if(strcmp(selections[current], "Home Carriage") == 0) homeCarriage();
-            if(strcmp(selections[current], "Profile 1") == 0) profile1();
 
             if(strcmp(selections[current], "Move Carriage") == 0) moveStepper(&carriageStepper);
             if(strcmp(selections[current], "Move Barrel") == 0) moveStepper(&barrelStepper);
@@ -963,7 +588,6 @@ int main_menu(char* date, char* time) {
             if(strcmp(selections[current], "Calibrate Barrel") == 0) calibrateBarrel();
 
 
-            if(strcmp(selections[current], "Profile 2") == 0) doBoth();
 
 
             if(strcmp(selections[current], "Read Encoder") == 0) readEncoder();

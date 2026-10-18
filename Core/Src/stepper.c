@@ -234,7 +234,7 @@ void computeNextStepperEvent(Stepper *s) {
         }
     }
 
-    if (s->currentSpeed == 0.0) {
+    if (s->currentSpeed == 0.0f) {
         s->speedSquared = 0.0f;
         __HAL_TIM_DISABLE_IT(cfg->timerHandle, cfg->compareInterruptSource);
         s->mode = STOPPED;
